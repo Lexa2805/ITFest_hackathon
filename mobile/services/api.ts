@@ -4,9 +4,43 @@
  */
 
 import axios from "axios";
+import Constants from "expo-constants";
+
+function stripQuotes(value: string): string {
+  return value.replace(/^['\"]|['\"]$/g, "").trim();
+}
+
+function getExpoHostApiUrl(): string | null {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    Constants.manifest2?.extra?.expoClient?.hostUri;
+
+  if (!hostUri) {
+    return null;
+  }
+
+  const host = hostUri.split(":")[0];
+  if (!host) {
+    return null;
+  }
+
+  return `http://${host}:8000`;
+}
+
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL
+  ? stripQuotes(process.env.EXPO_PUBLIC_API_URL)
+  : "";
+
+const pointsToLoopback =
+  configuredApiUrl.includes("localhost") ||
+  configuredApiUrl.includes("127.0.0.1");
+
+const expoHostApiUrl = getExpoHostApiUrl();
 
 const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+  configuredApiUrl && !pointsToLoopback
+    ? configuredApiUrl
+    : expoHostApiUrl || configuredApiUrl || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_URL,

@@ -1,14 +1,16 @@
 import React from 'react';
 import { SymbolView } from 'expo-symbols';
 import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const logout = useAuthStore((state) => state.logout);
 
   return (
     <Tabs
@@ -34,18 +36,33 @@ export default function TabLayout() {
             />
           ),
           headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginRight: 12 }}>
+              <Pressable onPress={logout}>
                 {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
+                  <Text
+                    style={{
+                      color: Colors[colorScheme].tint,
+                      fontSize: 15,
+                      fontWeight: '600',
+                      opacity: pressed ? 0.5 : 1,
+                    }}>
+                    Log out
+                  </Text>
                 )}
               </Pressable>
-            </Link>
+              <Link href="/modal" asChild>
+                <Pressable>
+                  {({ pressed }) => (
+                    <SymbolView
+                      name={{ ios: 'info.circle', android: 'info', web: 'info' }}
+                      size={25}
+                      tintColor={Colors[colorScheme].text}
+                      style={{ opacity: pressed ? 0.5 : 1 }}
+                    />
+                  )}
+                </Pressable>
+              </Link>
+            </View>
           ),
         }}
       />

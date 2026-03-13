@@ -58,9 +58,20 @@ export default function LoginScreen() {
       // Navigation handled by root layout auth gate
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setError(
-          err.response?.data?.detail ?? "Login failed. Please try again."
-        );
+        const detail =
+          typeof err.response?.data?.detail === "string"
+            ? err.response.data.detail
+            : null;
+
+        if (detail) {
+          setError(detail);
+        } else if (err.code === "ECONNABORTED" || !err.response) {
+          setError(
+            "Cannot reach server. Check EXPO_PUBLIC_API_URL and make sure backend is running on port 8000."
+          );
+        } else {
+          setError("Login failed. Please try again.");
+        }
       } else {
         setError("An unexpected error occurred.");
       }

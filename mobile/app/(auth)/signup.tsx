@@ -78,10 +78,20 @@ export default function SignUpScreen() {
       // Otherwise, tokens were applied and navigation is handled by root layout
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setError(
-          err.response?.data?.detail ??
-            "Sign up failed. Please try again."
-        );
+        const detail =
+          typeof err.response?.data?.detail === "string"
+            ? err.response.data.detail
+            : null;
+
+        if (detail) {
+          setError(detail);
+        } else if (err.code === "ECONNABORTED" || !err.response) {
+          setError(
+            "Cannot reach server. Check EXPO_PUBLIC_API_URL and make sure backend is running on port 8000."
+          );
+        } else {
+          setError("Sign up failed. Please try again.");
+        }
       } else {
         setError("An unexpected error occurred.");
       }
