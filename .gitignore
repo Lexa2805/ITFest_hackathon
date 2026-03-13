@@ -1,0 +1,20 @@
+# IDEs
+.vscode/
+.DS_Store
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/.env
+backend/*.pyc
+
+# Mobile
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/.env
+
+# Azure/Secrets
+.azure/
+secrets.json
+*.tfstate
