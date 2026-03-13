@@ -48,6 +48,17 @@ const api = axios.create({
   timeout: 15_000,
 });
 
+// ── Auth interceptor — attach Bearer token to every request ──
+api.interceptors.request.use((config) => {
+  // Lazy import to avoid circular dependency at module load time
+  const { useAuthStore } = require("@/stores/authStore");
+  const token = useAuthStore.getState().accessToken;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // ── Auth helpers ──────────────────────────────────────────────
 
 export interface AuthUser {

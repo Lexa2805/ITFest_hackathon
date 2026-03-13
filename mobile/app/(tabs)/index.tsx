@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFridgeStore } from '@/stores/fridgeStore';
 
 const C = {
   bg: '#0A0A0A',
@@ -10,13 +11,16 @@ const C = {
   muted: '#94A39A',
 } as const;
 
-const quickStats = [
-  { label: 'Fridge items', value: '12' },
-  { label: 'Expiring soon', value: '3' },
-  { label: 'Nutrition plans', value: '5' },
-];
-
 export default function HomeScreen() {
+  const { items, fetchItems } = useFridgeStore();
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const totalItems = items.length;
+  const expiringSoon = items.filter((i) => i.expiring_soon).length;
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -31,16 +35,18 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.grid}>
-          {quickStats.map((item) => (
-            <View key={item.label} style={styles.statCard}>
-              <Text style={styles.statValue}>{item.value}</Text>
-              <Text style={styles.statLabel}>{item.label}</Text>
-            </View>
-          ))}
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{totalItems}</Text>
+            <Text style={styles.statLabel}>Fridge items</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{expiringSoon}</Text>
+            <Text style={styles.statLabel}>Expiring soon</Text>
+          </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Today’s focus</Text>
+          <Text style={styles.cardTitle}>Today's focus</Text>
           <Text style={styles.cardText}>- Update expiring ingredients</Text>
           <Text style={styles.cardText}>- Add new groceries manually or by image</Text>
           <Text style={styles.cardText}>- Send latest list to Nutrition Agent</Text>

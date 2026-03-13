@@ -1,20 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-
-type FridgeItem = {
-  id: string;
-  name: string;
-  quantity: string;
-  expiresOn: string;
-};
+import * as ImagePicker from 'expo-image-picker';
+import { useFridgeStore } from '@/stores/fridgeStore';
+import type { ScannedIngredient } from '@/services/fridgeApi';
 
 const C = {
   bg: '#0A0A0A',
@@ -29,96 +27,164 @@ const C = {
   danger: '#FF6B6B',
 } as const;
 
-const demoVisionItems = [
-  { name: 'Tomatoes', quantity: '4 pcs', expiresInDays: 3 },
-  { name: 'Spinach', quantity: '1 bag', expiresInDays: 2 },
-  { name: 'Greek Yogurt', quantity: '2 cups', expiresInDays: 6 },
-];
-
-function futureDate(daysFromToday: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + daysFromToday);
-  return date.toISOString().slice(0, 10);
-}
-
-function expirationStatus(expiresOn: string): 'fresh' | 'soon' | 'expired' {
+function expirationStatus(expiryDate: string | null): 'fresh' | 'soon' | 'expired' | 'none' {
+  if (!expiryDate) return 'none';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const expiry = new Date(expiresOn);
+  const expiry = new Date(expiryDate);
   expiry.setHours(0, 0, 0, 0);
-
   const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
   if (diff < 0) return 'expired';
   if (diff <= 2) return 'soon';
   return 'fresh';
 }
 
 export default function FridgeScreen() {
+  const {
+    items,
+    scannedIngredients,
+    isLoading,
+    isScanning,
+    error,
+    fetchItems,
+    addItem,
+    removeItem,
+    scanImage,
+    confirmScan,
+    clearScan,
+  } = useFridgeStore();
+
   const [ingredient, setIngredient] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('');
   const [expiresOn, setExpiresOn] = useState('');
-  const [items, setItems] = useState<FridgeItem[]>([
-    { id: 'seed-1', name: 'Eggs', quantity: '8 pcs', expiresOn: futureDate(5) },
-    { id: 'seed-2', name: 'Milk', quantity: '1 bottle', expiresOn: futureDate(2) },
-  ]);
+  const [category, setCategory] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchItems();
+    setRefreshing(false);
+  }, [fetchItems]);
 
   const totalItems = items.length;
   const expiringSoonCount = useMemo(
-    () => items.filter((item) => expirationStatus(item.expiresOn) === 'soon').length,
+    () => items.filter((item) => item.expiring_soon).length,
     [items]
   );
 
-  const handleAddIngredient = () => {
-    if (!ingredient.trim() || !quantity.trim() || !expiresOn.trim()) {
-      Alert.alert('Missing data', 'Please add ingredient, quantity, and expiration date (YYYY-MM-DD).');
+  const handleAddIngredient = async () => {
+    if (!ingredient.trim()) {
+      Alert.alert('Missing data', 'Please enter at least an ingredient name.');
       return;
     }
 
-    const next: FridgeItem = {
-      id: Date.now().toString(),
-      name: ingredient.trim(),
-      quantity: quantity.trim(),
-      expiresOn: expiresOn.trim(),
-    };
+    const qty = parseFloat(quantity) || 1;
 
-    setItems((prev) => [next, ...prev]);
-    setIngredient('');
-    setQuantity('');
-    setExpiresOn('');
+    try {
+      await addItem({
+        name: ingredient.trim(),
+        quantity: qty,
+        unit: unit.trim() || 'pcs',
+        expiry_date: expiresOn.trim() || null,
+        category: category.trim() || 'other',
+      });
+      setIngredient('');
+      setQuantity('');
+      setUnit('');
+      setExpiresOn('');
+      setCategory('');
+    } catch {
+      // Error is already set in the store
+    }
+  };
+
+  const handlePickImage = async () => {
+    const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert('Permission required', 'Please allow access to your photos to scan ingredients.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await scanImage(result.assets[0].uri);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const permResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert('Permission required', 'Please allow camera access to scan ingredients.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await scanImage(result.assets[0].uri);
+    }
   };
 
   const handleVisionRecognition = () => {
-    const recognized = demoVisionItems.map((item, index) => ({
-      id: `vision-${Date.now()}-${index}`,
-      name: item.name,
-      quantity: item.quantity,
-      expiresOn: futureDate(item.expiresInDays),
-    }));
-
-    setItems((prev) => [...recognized, ...prev]);
-    Alert.alert('AI Vision complete', `Detected ${recognized.length} ingredients and added to your fridge.`);
+    Alert.alert('Scan Ingredients', 'Choose a source', [
+      { text: 'Camera', onPress: handleTakePhoto },
+      { text: 'Gallery', onPress: handlePickImage },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
-  const handleSendToNutritionAgent = () => {
-    const payload = items.map(({ name, quantity, expiresOn }) => ({
-      name,
-      quantity,
-      expiresOn,
-    }));
+  const handleConfirmScan = async () => {
+    await confirmScan();
+    Alert.alert('Added!', `${scannedIngredients.length} ingredient(s) saved to your fridge.`);
+  };
 
-    Alert.alert(
-      'Sent to Nutrition Agent',
-      `Shared ${payload.length} ingredients for meal and nutrition planning.`
-    );
+  const handleDeleteItem = (id: string, name: string) => {
+    Alert.alert('Delete item', `Remove "${name}" from your fridge?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => removeItem(id),
+      },
+    ]);
   };
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.accent}
+            colors={[C.accent]}
+          />
+        }
+      >
         <Text style={styles.title}>Fridge System</Text>
         <Text style={styles.subtitle}>Track ingredients, expiration, and sync with Nutrition Agent</Text>
 
+        {/* Error banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>⚠  {error}</Text>
+          </View>
+        )}
+
+        {/* Metrics */}
         <View style={styles.metricsRow}>
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>{totalItems}</Text>
@@ -130,75 +196,164 @@ export default function FridgeScreen() {
           </View>
         </View>
 
+        {/* Manual addition */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Manual addition</Text>
           <TextInput
-            placeholder="Ingredient name"
+            placeholder="Ingredient name *"
             placeholderTextColor={C.muted}
             value={ingredient}
             onChangeText={setIngredient}
             style={styles.input}
           />
+          <View style={styles.row2col}>
+            <TextInput
+              placeholder="Qty (e.g. 2)"
+              placeholderTextColor={C.muted}
+              value={quantity}
+              onChangeText={setQuantity}
+              keyboardType="numeric"
+              style={[styles.input, styles.halfInput]}
+            />
+            <TextInput
+              placeholder="Unit (pcs)"
+              placeholderTextColor={C.muted}
+              value={unit}
+              onChangeText={setUnit}
+              style={[styles.input, styles.halfInput]}
+            />
+          </View>
           <TextInput
-            placeholder="Quantity (e.g. 2 pcs, 300g)"
-            placeholderTextColor={C.muted}
-            value={quantity}
-            onChangeText={setQuantity}
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Expiration date (YYYY-MM-DD)"
+            placeholder="Expiry date YYYY-MM-DD (optional)"
             placeholderTextColor={C.muted}
             value={expiresOn}
             onChangeText={setExpiresOn}
             style={styles.input}
           />
-          <Pressable style={styles.primaryButton} onPress={handleAddIngredient}>
-            <Text style={styles.primaryButtonText}>Add Ingredient</Text>
+          <TextInput
+            placeholder="Category (e.g. dairy, meat — optional)"
+            placeholderTextColor={C.muted}
+            value={category}
+            onChangeText={setCategory}
+            style={styles.input}
+          />
+          <Pressable
+            style={[styles.primaryButton, isLoading && styles.disabledButton]}
+            onPress={handleAddIngredient}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#00150A" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Add Ingredient</Text>
+            )}
           </Pressable>
         </View>
 
+        {/* AI Vision */}
         <View style={[styles.card, styles.visionCard]}>
           <Text style={styles.cardTitle}>Image recognition (AI vision)</Text>
           <Text style={styles.cardText}>
-            Scan your fridge image and auto-detect ingredients for faster updates.
+            Scan your fridge image with GPT 5.1 and auto-detect ingredients.
           </Text>
-          <Pressable style={styles.secondaryButton} onPress={handleVisionRecognition}>
-            <Text style={styles.secondaryButtonText}>Recognize from Image</Text>
+          <Pressable
+            style={[styles.secondaryButton, isScanning && styles.disabledButton]}
+            onPress={handleVisionRecognition}
+            disabled={isScanning}
+          >
+            {isScanning ? (
+              <ActivityIndicator color="#86FFBE" />
+            ) : (
+              <Text style={styles.secondaryButtonText}>Scan from Camera / Gallery</Text>
+            )}
           </Pressable>
         </View>
 
+        {/* Scanned ingredients confirmation */}
+        {scannedIngredients.length > 0 && (
+          <View style={[styles.card, styles.scanResultCard]}>
+            <Text style={styles.cardTitle}>
+              Detected {scannedIngredients.length} ingredient(s)
+            </Text>
+            {scannedIngredients.map((ing: ScannedIngredient, idx: number) => (
+              <View key={`${ing.name}-${idx}`} style={styles.scanRow}>
+                <Text style={styles.scanName}>{ing.name}</Text>
+                <Text style={styles.scanMeta}>
+                  {ing.estimated_quantity} {ing.unit} · {ing.category}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.scanActions}>
+              <Pressable style={styles.primaryButton} onPress={handleConfirmScan}>
+                <Text style={styles.primaryButtonText}>Confirm & Add All</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.secondaryButton, { marginTop: 8 }]}
+                onPress={clearScan}
+              >
+                <Text style={styles.secondaryButtonText}>Discard</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Inventory */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Inventory</Text>
-          {items.map((item) => {
-            const status = expirationStatus(item.expiresOn);
-            const badgeStyle =
-              status === 'expired'
-                ? styles.badgeExpired
-                : status === 'soon'
-                  ? styles.badgeSoon
-                  : styles.badgeFresh;
+          {isLoading && items.length === 0 ? (
+            <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
+          ) : items.length === 0 ? (
+            <Text style={styles.cardText}>No items yet. Add some ingredients!</Text>
+          ) : (
+            items.map((item) => {
+              const status = expirationStatus(item.expiry_date);
+              const badgeStyle =
+                status === 'expired'
+                  ? styles.badgeExpired
+                  : status === 'soon'
+                    ? styles.badgeSoon
+                    : status === 'fresh'
+                      ? styles.badgeFresh
+                      : null;
 
-            const badgeText = status === 'expired' ? 'Expired' : status === 'soon' ? 'Soon' : 'Fresh';
+              const badgeText =
+                status === 'expired'
+                  ? 'Expired'
+                  : status === 'soon'
+                    ? 'Soon'
+                    : status === 'fresh'
+                      ? 'Fresh'
+                      : null;
 
-            return (
-              <View key={item.id} style={styles.row}>
-                <View>
-                  <Text style={styles.rowTitle}>{item.name}</Text>
-                  <Text style={styles.rowMeta}>{item.quantity}</Text>
-                  <Text style={styles.rowMeta}>Expires: {item.expiresOn}</Text>
+              return (
+                <View key={item.id} style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{item.name}</Text>
+                    <Text style={styles.rowMeta}>
+                      {item.quantity} {item.unit} · {item.category}
+                    </Text>
+                    {item.expiry_date && (
+                      <Text style={styles.rowMeta}>Expires: {item.expiry_date}</Text>
+                    )}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {badgeStyle && (
+                      <View style={[styles.badge, badgeStyle]}>
+                        <Text style={styles.badgeText}>{badgeText}</Text>
+                      </View>
+                    )}
+                    <Pressable
+                      onPress={() => handleDeleteItem(item.id, item.name)}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.deleteBtn}>✕</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={[styles.badge, badgeStyle]}>
-                  <Text style={styles.badgeText}>{badgeText}</Text>
-                </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
-
-        <Pressable style={[styles.primaryButton, styles.sendButton]} onPress={handleSendToNutritionAgent}>
-          <Text style={styles.primaryButtonText}>Send Ingredients to Nutrition Agent</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -223,6 +378,17 @@ const styles = StyleSheet.create({
     color: C.muted,
     fontSize: 14,
     marginTop: -4,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    borderColor: 'rgba(255,107,107,0.4)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  errorText: {
+    color: C.danger,
+    fontSize: 13,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -257,6 +423,10 @@ const styles = StyleSheet.create({
   visionCard: {
     backgroundColor: '#0F1712',
   },
+  scanResultCard: {
+    backgroundColor: '#101820',
+    borderColor: '#1E3050',
+  },
   cardTitle: {
     color: C.text,
     fontSize: 17,
@@ -276,6 +446,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+  },
+  row2col: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  halfInput: {
+    flex: 1,
   },
   primaryButton: {
     backgroundColor: C.accent,
@@ -302,6 +479,27 @@ const styles = StyleSheet.create({
     color: '#86FFBE',
     fontSize: 14,
     fontWeight: '700',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  scanRow: {
+    backgroundColor: '#111820',
+    borderRadius: 10,
+    padding: 10,
+  },
+  scanName: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  scanMeta: {
+    color: C.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  scanActions: {
+    marginTop: 4,
   },
   row: {
     flexDirection: 'row',
@@ -343,7 +541,10 @@ const styles = StyleSheet.create({
   badgeExpired: {
     backgroundColor: C.danger,
   },
-  sendButton: {
-    marginTop: 2,
+  deleteBtn: {
+    color: C.danger,
+    fontSize: 18,
+    fontWeight: '700',
+    paddingHorizontal: 4,
   },
 });
