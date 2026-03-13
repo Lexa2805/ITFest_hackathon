@@ -96,3 +96,7 @@ export const recommendedMeals: MealSuggestion[] = [
 
 export const healthAwareMessage =
     'Suggestions are dynamically adjusted to your calorie target, current health signals, and available fridge ingredients.';
+
+export default function NutritionMockRoute() {
+    return null;
+}

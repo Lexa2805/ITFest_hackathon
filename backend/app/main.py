@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.fridge import router as fridge_router
+from app.api.nutrition import router as nutrition_router
 
 app = FastAPI(
     title="Personal Health OS",
@@ -30,6 +31,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(auth_router)
 app.include_router(fridge_router)
+app.include_router(nutrition_router)
 
 
 # ---------------------------------------------------------------------------

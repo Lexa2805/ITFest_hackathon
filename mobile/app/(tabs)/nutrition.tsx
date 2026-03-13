@@ -1,17 +1,22 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MacroProgressRow } from '@/components/nutrition/MacroProgressRow';
 import { MealRecommendationCard } from '@/components/nutrition/MealRecommendationCard';
 import { NutritionCard } from '@/components/nutrition/NutritionCard';
 import { RecipeSuggestionCard } from '@/components/nutrition/RecipeSuggestionCard';
 import { ShoppingListItem } from '@/components/nutrition/ShoppingListItem';
 import {
-    dailySummary,
-    fridgeBasedRecipes,
+    getTodayLog,
+    suggestRecipes,
+    getLatestShoppingList,
+    DailyLogResponse,
+    RecipeResponse,
+    ShoppingListResponse
+} from '@/services/nutritionApi';
+import {
     healthAwareMessage,
-    macroTargets,
-    missingIngredients,
     nutritionFilters,
     nutritionHeader,
     recommendedMeals,
@@ -35,6 +40,53 @@ function FilterChip({ label }: { label: string }) {
 }
 
 export default function NutritionScreen() {
+    const [loadingLog, setLoadingLog] = useState(true);
+    const [loadingRecipes, setLoadingRecipes] = useState(true);
+    const [loadingShopping, setLoadingShopping] = useState(true);
+
+    const [log, setLog] = useState<DailyLogResponse | null>(null);
+    const [recipes, setRecipes] = useState<RecipeResponse[]>([]);
+    const [shoppingList, setShoppingList] = useState<ShoppingListResponse | null>(null);
+
+    useEffect(() => {
+        getTodayLog()
+            .then(setLog)
+            .catch(err => console.error("Error loading daily log:", err, err.response?.data))
+            .finally(() => setLoadingLog(false));
+            
+        suggestRecipes()
+            .then(setRecipes)
+            .catch(err => console.error("Error suggesting recipes:", err, err.response?.data))
+            .finally(() => setLoadingRecipes(false));
+            
+        getLatestShoppingList()
+            .then(setShoppingList)
+            .catch(err => {
+                if (err.response?.status !== 404) {
+                    console.error("Error loading shopping list:", err, err.response?.data);
+                }
+            })
+            .finally(() => setLoadingShopping(false));
+    }, []);
+
+    const targetCalories = log?.goal_calories ?? 2000;
+    const consumedCalories = log?.total_calories ?? 0;
+    const remainingCalories = Math.max(0, targetCalories - consumedCalories);
+
+    const macroTargetsData = [
+        { label: 'Protein', current: log?.total_protein_g ?? 0, target: log?.goal_protein_g ?? 150, accentColor: '#5B8DEF' },
+        { label: 'Carbs', current: log?.total_carbs_g ?? 0, target: log?.goal_carbs_g ?? 200, accentColor: '#6EC8A8' },
+        { label: 'Fats', current: log?.total_fat_g ?? 0, target: log?.goal_fat_g ?? 70, accentColor: '#F5A66B' },
+    ];
+
+    if (loadingLog) {
+        return (
+            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#4062D9" />
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -58,23 +110,23 @@ export default function NutritionScreen() {
                     <View style={styles.summaryStatsRow}>
                         <View style={styles.summaryStatCard}>
                             <Text style={styles.summaryStatLabel}>Target</Text>
-                            <Text style={styles.summaryStatValue}>{dailySummary.targetCalories}</Text>
+                            <Text style={styles.summaryStatValue}>{targetCalories}</Text>
                             <Text style={styles.summaryStatUnit}>kcal</Text>
                         </View>
                         <View style={styles.summaryStatCard}>
                             <Text style={styles.summaryStatLabel}>Consumed</Text>
-                            <Text style={styles.summaryStatValue}>{dailySummary.consumedCalories}</Text>
+                            <Text style={styles.summaryStatValue}>{consumedCalories}</Text>
                             <Text style={styles.summaryStatUnit}>kcal</Text>
                         </View>
                         <View style={styles.summaryStatCard}>
                             <Text style={styles.summaryStatLabel}>Remaining</Text>
-                            <Text style={styles.summaryStatValue}>{dailySummary.remainingCalories}</Text>
+                            <Text style={styles.summaryStatValue}>{remainingCalories}</Text>
                             <Text style={styles.summaryStatUnit}>kcal</Text>
                         </View>
                     </View>
 
                     <View style={styles.macroRows}>
-                        {macroTargets.map((macro) => (
+                        {macroTargetsData.map((macro) => (
                             <MacroProgressRow
                                 key={macro.label}
                                 label={macro.label}
@@ -92,26 +144,49 @@ export default function NutritionScreen() {
                         subtitle="Recipe picks from ingredients currently in your fridge"
                     />
                     <View style={styles.verticalList}>
-                        {fridgeBasedRecipes.map((recipe) => (
-                            <RecipeSuggestionCard
-                                key={recipe.name}
-                                name={recipe.name}
-                                prepTime={recipe.prepTime}
-                                calories={recipe.calories}
-                                description={recipe.description}
-                                tag={recipe.tag}
-                            />
-                        ))}
+                        {loadingRecipes ? (
+                            <ActivityIndicator size="small" color="#4062D9" style={{ marginVertical: 20 }} />
+                        ) : recipes.length > 0 ? (
+                            recipes.map((recipe) => (
+                                <RecipeSuggestionCard
+                                    key={recipe.id}
+                                    name={recipe.name}
+                                    prepTime={`${recipe.prep_time_minutes} min`}
+                                    calories={recipe.calories}
+                                    description={recipe.instructions && recipe.instructions.length > 0 ? recipe.instructions[0].substring(0, 60) + '...' : 'Delicious meal'}
+                                    tag={recipe.protein_g > 20 ? 'High Protein' : 'Balanced'}
+                                />
+                            ))
+                        ) : (
+                            <Text style={{ textAlign: 'center', color: '#6B7280', marginVertical: 20 }}>
+                                No recipes could be generated right now.
+                            </Text>
+                        )}
                     </View>
                 </View>
 
                 <NutritionCard title="Missing Ingredients" subtitle="For selected recipes">
-                    {missingIngredients.map((item) => (
-                        <ShoppingListItem key={item.name} name={item.name} amount={item.amount} group={item.group} />
-                    ))}
-                    <Pressable style={styles.shoppingCta}>
-                        <Text style={styles.shoppingCtaText}>Add to shopping list</Text>
-                    </Pressable>
+                    {loadingShopping ? (
+                        <ActivityIndicator size="small" color="#1C7C54" style={{ marginVertical: 20 }} />
+                    ) : shoppingList?.items && shoppingList.items.length > 0 ? (
+                        <>
+                            {shoppingList.items.map((item, index) => (
+                                <ShoppingListItem
+                                    key={`${item.name}-${index}`}
+                                    name={item.name}
+                                    amount={`${item.quantity_needed} ${item.unit}`}
+                                    group={item.category}
+                                />
+                            ))}
+                            <Pressable style={styles.shoppingCta}>
+                                <Text style={styles.shoppingCtaText}>Add to shopping list</Text>
+                            </Pressable>
+                        </>
+                    ) : (
+                        <Text style={{ textAlign: 'center', color: '#6B7280', marginVertical: 20 }}>
+                            You have all ingredients in your fridge!
+                        </Text>
+                    )}
                 </NutritionCard>
 
                 <View>
