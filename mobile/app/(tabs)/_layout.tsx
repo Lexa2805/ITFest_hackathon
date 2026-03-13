@@ -1,7 +1,7 @@
 import React from 'react';
-import { SymbolView } from 'expo-symbols';
+import { Ionicons } from '@expo/vector-icons';
 import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -10,12 +10,35 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const theme = colorScheme ?? 'light';
   const logout = useAuthStore((state) => state.logout);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
+        tabBarActiveTintColor: Colors[theme].tint,
+        tabBarInactiveTintColor: '#99A3B3',
+        tabBarStyle: {
+          position: 'absolute',
+          left: 16,
+          right: 16,
+          bottom: 12,
+          borderRadius: 18,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+          borderTopWidth: 0,
+          backgroundColor: '#FFFFFF',
+          shadowColor: '#0F172A',
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 16,
+          elevation: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
         // Disable the static render of the header on web
         // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
@@ -25,15 +48,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'house.fill',
-                android: 'home',
-                web: 'home',
-              }}
-              tintColor={color}
-              size={28}
-            />
+            <Ionicons name="home" color={color} size={24} />
           ),
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginRight: 12 }}>
@@ -41,7 +56,7 @@ export default function TabLayout() {
                 {({ pressed }) => (
                   <Text
                     style={{
-                      color: Colors[colorScheme].tint,
+                      color: Colors[theme].tint,
                       fontSize: 15,
                       fontWeight: '600',
                       opacity: pressed ? 0.5 : 1,
@@ -53,10 +68,10 @@ export default function TabLayout() {
               <Link href="/modal" asChild>
                 <Pressable>
                   {({ pressed }) => (
-                    <SymbolView
-                      name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                      size={25}
-                      tintColor={Colors[colorScheme].text}
+                    <Ionicons
+                      name="information-circle"
+                      size={24}
+                      color={Colors[theme].text}
                       style={{ opacity: pressed ? 0.5 : 1 }}
                     />
                   )}
@@ -71,15 +86,16 @@ export default function TabLayout() {
         options={{
           title: 'Fridge',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'snowflake',
-                android: 'kitchen',
-                web: 'inventory_2',
-              }}
-              tintColor={color}
-              size={28}
-            />
+            <Ionicons name="snow" color={color} size={24} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="nutrition"
+        options={{
+          title: 'Nutrition',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="nutrition" color={color} size={24} />
           ),
         }}
       />
