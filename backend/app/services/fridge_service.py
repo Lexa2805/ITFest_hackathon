@@ -18,7 +18,7 @@ from app.schemas.fridge import (
     FridgeItemUpdate,
     InventoryItem,
 )
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 TABLE = "fridge_items"
 
@@ -58,11 +58,12 @@ def _row_to_inventory(row: dict) -> InventoryItem:
 
 async def add_item(user_id: str, item: FridgeItemCreate) -> FridgeItemOut:
     """Insert a single fridge item."""
+    supabase = await get_supabase()
     payload = {
         "user_id": user_id,
         **item.model_dump(mode="json"),
     }
-    result = (
+    result = await (
         supabase.table(TABLE)
         .insert(payload)
         .execute()
@@ -77,7 +78,8 @@ async def add_item(user_id: str, item: FridgeItemCreate) -> FridgeItemOut:
 
 async def get_items(user_id: str) -> list[FridgeItemOut]:
     """Return every fridge item for a user, newest first."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .select("*")
         .eq("user_id", user_id)
@@ -89,7 +91,8 @@ async def get_items(user_id: str) -> list[FridgeItemOut]:
 
 async def get_item(user_id: str, item_id: UUID) -> FridgeItemOut:
     """Fetch a single fridge item (404 if not found or not owned)."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .select("*")
         .eq("id", str(item_id))
@@ -115,7 +118,8 @@ async def update_item(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No fields to update.",
         )
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .update(changes)
         .eq("id", str(item_id))
@@ -132,7 +136,8 @@ async def update_item(
 
 async def delete_item(user_id: str, item_id: UUID) -> None:
     """Remove a fridge item."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .delete()
         .eq("id", str(item_id))
@@ -150,11 +155,12 @@ async def bulk_add_items(
     user_id: str, items: list[FridgeItemCreate]
 ) -> list[FridgeItemOut]:
     """Insert multiple fridge items at once (after scan confirmation)."""
+    supabase = await get_supabase()
     payloads = [
         {"user_id": user_id, **item.model_dump(mode="json")}
         for item in items
     ]
-    result = (
+    result = await (
         supabase.table(TABLE)
         .insert(payloads)
         .execute()
@@ -169,7 +175,8 @@ async def bulk_add_items(
 
 async def get_inventory(user_id: str) -> list[InventoryItem]:
     """Return a clean, structured list for the Nutrition Agent."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .select("name, quantity, unit, category, expiry_date")
         .eq("user_id", user_id)

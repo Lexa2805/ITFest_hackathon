@@ -22,7 +22,7 @@ from app.schemas.fridge import (
     ScanResponse,
 )
 from app.services import fridge_service, vision_service
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 router = APIRouter(prefix="/fridge", tags=["fridge"])
 
@@ -55,7 +55,8 @@ async def get_current_user_id(
         )
 
     try:
-        user_resp = supabase.auth.get_user(token)
+        supabase = await get_supabase()
+        user_resp = await supabase.auth.get_user(token)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

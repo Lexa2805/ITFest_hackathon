@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.schemas.health import ParsedHealthMetrics, PhysicalStateResult
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 
 async def save_health_data(
@@ -17,6 +17,7 @@ async def save_health_data(
     Save or update health export data for a user.
     Uses upsert to update if record exists, insert if not.
     """
+    supabase = await get_supabase()
     data = {
         "user_id": user_id,
         "parsed_metrics": parsed_metrics.model_dump(mode="json"),
@@ -24,7 +25,7 @@ async def save_health_data(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    result = (
+    result = await (
         supabase.table("health_exports")
         .upsert(data, on_conflict="user_id")
         .execute()
@@ -41,7 +42,8 @@ async def get_health_data(user_id: str) -> dict | None:
     Retrieve the latest health export data for a user.
     Returns None if no data exists.
     """
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table("health_exports")
         .select("*")
         .eq("user_id", user_id)

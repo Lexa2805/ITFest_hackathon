@@ -83,10 +83,10 @@ export async function loginUser(
   email: string,
   password: string
 ): Promise<AuthResponse> {
-  const { data } = await api.post<AuthResponse>("/api/auth/login", {
-    email,
-    password,
-  });
+  const { data } = await api.post<AuthResponse>("/api/auth/login",
+    { email, password },
+    { timeout: 30_000 },
+  );
   return data;
 }
 
@@ -94,10 +94,10 @@ export async function signUpUser(
   email: string,
   password: string
 ): Promise<SignUpResponse> {
-  const { data } = await api.post<SignUpResponse>("/api/auth/signup", {
-    email,
-    password,
-  });
+  const { data } = await api.post<SignUpResponse>("/api/auth/signup",
+    { email, password },
+    { timeout: 30_000 },
+  );
   return data;
 }
 

@@ -5,6 +5,13 @@ import { useHealthStore } from '@/stores/healthStore';
 import { useFridgeStore } from '@/stores/fridgeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { getLatestShoppingList, suggestRecipes, RecipeResponse, ShoppingListResponse } from '@/services/nutritionApi';
+import { DailyBriefingCard } from '@/components/home/DailyBriefingCard';
+import { TrendSparkline } from '@/components/home/TrendSparkline';
+import { StreakBadge } from '@/components/home/StreakBadge';
+import { ExpiryAlertBanner } from '@/components/home/ExpiryAlertBanner';
+import { getTrendData, type TrendResponse } from '@/services/trendApi';
+import { getStreaks, type StreakResponse } from '@/services/streakApi';
+import { getExpiryAlerts, type ExpiryAlertItem } from '@/services/expiryApi';
 
 type HealthMetric = {
   label: string;
@@ -86,6 +93,11 @@ export default function HomeScreen() {
   const [shoppingList, setShoppingList] = useState<ShoppingListResponse | null>(null);
   const [loadingRecipes, setLoadingRecipes] = useState(true);
   const [loadingShopping, setLoadingShopping] = useState(true);
+  const [trendSleep, setTrendSleep] = useState<TrendResponse | null>(null);
+  const [trendSteps, setTrendSteps] = useState<TrendResponse | null>(null);
+  const [trendCalories, setTrendCalories] = useState<TrendResponse | null>(null);
+  const [streaks, setStreaks] = useState<StreakResponse | null>(null);
+  const [expiryAlerts, setExpiryAlerts] = useState<ExpiryAlertItem[]>([]);
 
   // Fetch all data on mount
   useEffect(() => {
@@ -109,6 +121,12 @@ export default function HomeScreen() {
         }
       })
       .finally(() => setLoadingShopping(false));
+
+    getTrendData('sleep_hours', 7).then(setTrendSleep).catch(() => {});
+    getTrendData('steps', 7).then(setTrendSteps).catch(() => {});
+    getTrendData('calories', 7).then(setTrendCalories).catch(() => {});
+    getStreaks().then(setStreaks).catch(() => {});
+    getExpiryAlerts().then(setExpiryAlerts).catch(() => {});
   }, []);
 
   // Get greeting based on time of day
@@ -127,42 +145,6 @@ export default function HomeScreen() {
     }
     return 'there';
   }, [user]);
-
-  // Generate AI insight based on health data
-  const aiInsight = useMemo(() => {
-    if (!healthData) {
-      return 'Upload your health data to get personalized insights and recommendations.';
-    }
-
-    const m = healthData.parsed_metrics;
-    const sleepHours = m.sleep_analysis.average;
-    const avgSteps = Math.round(m.step_count.average);
-    const avgHR = Math.round(m.heart_rate.average);
-
-    let insights: string[] = [];
-
-    if (sleepHours < 7) {
-      insights.push('Your sleep could use improvement');
-    } else if (sleepHours >= 7 && sleepHours < 8) {
-      insights.push('Your sleep is on track');
-    } else {
-      insights.push('Great sleep quality');
-    }
-
-    if (avgSteps < 5000) {
-      insights.push('Try to increase your daily movement');
-    } else if (avgSteps >= 10000) {
-      insights.push('Excellent activity levels');
-    }
-
-    if (avgHR >= 60 && avgHR <= 75) {
-      insights.push('Your resting heart rate is healthy');
-    }
-
-    return insights.length > 0
-      ? `${insights.join('. ')}. Keep up the momentum with balanced nutrition and regular movement.`
-      : 'Your health metrics look good. Stay consistent with your wellness routine.';
-  }, [healthData]);
 
   // Transform health data from the store into the format needed for display
   const healthMetrics: HealthMetric[] = useMemo(() => {
@@ -325,10 +307,22 @@ export default function HomeScreen() {
           <Text style={styles.welcomeCaption}>Your wellness assistant is ready for today.</Text>
         </View>
 
-        <SurfaceCard>
-          <Text style={styles.aiLabel}>AI Summary</Text>
-          <Text style={styles.aiInsight}>{aiInsight}</Text>
-        </SurfaceCard>
+        <DailyBriefingCard />
+
+        {expiryAlerts.length > 0 && (
+          <ExpiryAlertBanner items={expiryAlerts} />
+        )}
+
+        {streaks && (
+          <View>
+            <SectionHeader title="Streaks" />
+            <View style={styles.streakRow}>
+              <StreakBadge activityType="checkin" currentStreak={streaks.checkin.current_streak} />
+              <StreakBadge activityType="meal_logged" currentStreak={streaks.meal_logged.current_streak} />
+              <StreakBadge activityType="calorie_goal" currentStreak={streaks.calorie_goal.current_streak} />
+            </View>
+          </View>
+        )}
 
         <View>
           <SectionHeader title="Health Overview" />
@@ -336,6 +330,20 @@ export default function HomeScreen() {
             {healthMetrics.map((metric) => (
               <HealthMetricCard key={metric.label} metric={metric} />
             ))}
+          </View>
+          <View style={styles.trendRow}>
+            <TrendSparkline
+              dataPoints={trendSleep?.data_points ?? []}
+              label="Sleep"
+            />
+            <TrendSparkline
+              dataPoints={trendSteps?.data_points ?? []}
+              label="Steps"
+            />
+            <TrendSparkline
+              dataPoints={trendCalories?.data_points ?? []}
+              label="Calories"
+            />
           </View>
         </View>
 
@@ -454,19 +462,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 8,
   },
-  aiLabel: {
-    color: C.accent,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  aiInsight: {
-    color: C.title,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '500',
-  },
   sectionHeader: {
     marginBottom: 8,
     gap: 2,
@@ -581,5 +576,15 @@ const styles = StyleSheet.create({
     color: C.muted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  trendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 8,
+  },
+  streakRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
 });

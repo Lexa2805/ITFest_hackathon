@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException, status
 
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 from app.services.fridge_client import fetch_fridge_inventory
 from app.services.nutrition_service import get_goal
 from app.schemas.nutrition import RecipeResponse
@@ -99,10 +99,11 @@ def _fallback_recipes_from_inventory(inventory: list[dict]) -> list[dict]:
     return recipes
 
 async def suggest_recipes(user_id: str, token: str, force_regenerate: bool = False) -> list[RecipeResponse]:
+    supabase = await get_supabase()
     # Check if we have recipes generated today
     if not force_regenerate:
         today = datetime.date.today().isoformat()
-        result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).execute()
+        result = await supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).execute()
         existing_recipes = _safe_data(result) or []
         
         if existing_recipes and len(existing_recipes) >= 3:
@@ -203,7 +204,7 @@ async def suggest_recipes(user_id: str, token: str, force_regenerate: bool = Fal
             "prep_time_minutes": recipe.get("prep_time_minutes", 0),
             "generated_at": generated_at
         }
-        res = supabase.table(RECIPES_TABLE).insert(payload_db).execute()
+        res = await supabase.table(RECIPES_TABLE).insert(payload_db).execute()
         inserted_data = _safe_data(res)
         if inserted_data:
             saved_recipes.append(RecipeResponse(**inserted_data[0]))
@@ -211,11 +212,13 @@ async def suggest_recipes(user_id: str, token: str, force_regenerate: bool = Fal
     return saved_recipes
 
 async def get_user_recipes(user_id: str, limit: int = 10) -> list[RecipeResponse]:
-    result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).limit(limit).execute()
+    supabase = await get_supabase()
+    result = await supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).limit(limit).execute()
     return [RecipeResponse(**row) for row in (_safe_data(result) or [])]
 
 async def get_recipe(user_id: str, recipe_id: str) -> dict:
-    result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).eq("id", recipe_id).maybe_single().execute()
+    supabase = await get_supabase()
+    result = await supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).eq("id", recipe_id).maybe_single().execute()
     recipe_data = _safe_data(result)
     if not recipe_data:
         raise HTTPException(status_code=404, detail="Recipe not found.")

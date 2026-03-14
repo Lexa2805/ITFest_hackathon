@@ -7,11 +7,18 @@ import datetime
 import httpx
 from fastapi import HTTPException, status
 
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 from app.services.fridge_client import fetch_fridge_inventory
 from app.schemas.nutrition import ShoppingListResponse
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_data(result) -> object:
+    if result is None:
+        return None
+    return getattr(result, "data", None)
+
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -33,10 +40,11 @@ Do NOT wrap the JSON in markdown code fences. Return raw JSON only."""
 
 
 async def generate_shopping_list(user_id: str, token: str, force_regenerate: bool = False) -> ShoppingListResponse:
+    supabase = await get_supabase()
     # Check if we have a shopping list generated today
     if not force_regenerate:
         today = datetime.date.today().isoformat()
-        result = supabase.table(SHOPPING_LIST_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).limit(1).execute()
+        result = await supabase.table(SHOPPING_LIST_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).limit(1).execute()
         existing_list = _safe_data(result)
         
         if existing_list and len(existing_list) > 0:
@@ -50,7 +58,7 @@ async def generate_shopping_list(user_id: str, token: str, force_regenerate: boo
         inventory = []
     
     # 2. Fetch recent recipes used or planned.
-    result = supabase.table(RECIPES_TABLE).select("ingredients").eq("user_id", user_id).order("generated_at", desc=True).limit(5).execute()
+    result = await supabase.table(RECIPES_TABLE).select("ingredients").eq("user_id", user_id).order("generated_at", desc=True).limit(5).execute()
     recipes = result.data or []
     needed_ingredients = []
     for r in recipes:
@@ -121,7 +129,7 @@ async def generate_shopping_list(user_id: str, token: str, force_regenerate: boo
         "status": "pending",
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
-    res = supabase.table(SHOPPING_LIST_TABLE).insert(payload_db).execute()
+    res = await supabase.table(SHOPPING_LIST_TABLE).insert(payload_db).execute()
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to save shopping list.")
         
@@ -129,15 +137,17 @@ async def generate_shopping_list(user_id: str, token: str, force_regenerate: boo
 
 
 async def get_latest_shopping_list(user_id: str) -> ShoppingListResponse:
-    result = supabase.table(SHOPPING_LIST_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).limit(1).execute()
+    supabase = await get_supabase()
+    result = await supabase.table(SHOPPING_LIST_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).limit(1).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="No shopping lists found.")
     return ShoppingListResponse(**result.data[0])
 
 
 async def forward_shopping_list(user_id: str, list_id: str) -> dict:
+    supabase = await get_supabase()
     # "POST /shopping/proposal — that system will be built later, so mock the call gracefully if unavailable"
-    result = supabase.table(SHOPPING_LIST_TABLE).select("*").eq("id", list_id).eq("user_id", user_id).maybe_single().execute()
+    result = await supabase.table(SHOPPING_LIST_TABLE).select("*").eq("id", list_id).eq("user_id", user_id).maybe_single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Shopping list not found.")
         
@@ -156,7 +166,7 @@ async def forward_shopping_list(user_id: str, list_id: str) -> dict:
             resp.raise_for_status()
             
             # If successful, mark as ordered
-            supabase.table(SHOPPING_LIST_TABLE).update({"status": "ordered"}).eq("id", list_id).execute()
+            await supabase.table(SHOPPING_LIST_TABLE).update({"status": "ordered"}).eq("id", list_id).execute()
             return {"detail": "Shopping list forwarded successfully."}
             
     except httpx.RequestError:

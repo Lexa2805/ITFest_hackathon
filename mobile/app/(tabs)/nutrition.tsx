@@ -19,6 +19,7 @@ import { BarcodeScanningResult, CameraView, useCameraPermissions } from "expo-ca
 import { MacroBar } from "@/components/nutrition/MacroBar";
 import { MealPlanCard } from "@/components/nutrition/MealPlanCard";
 import { TabButton } from "@/components/nutrition/TabButton";
+import { PhotoMealCapture } from "@/components/nutrition/PhotoMealCapture";
 import {
     BarcodeNutritionProduct,
     DailySummaryResponse,
@@ -477,6 +478,12 @@ export default function NutritionScreen() {
                                 </View>
                             </View>
                         </View>
+
+                        <PhotoMealCapture onComplete={() => {
+                            if (userId) {
+                                getDailySummary(userId, todayIso).then(setDailySummary).catch(() => {});
+                            }
+                        }} />
 
                         <Pressable style={styles.primaryButton} onPress={() => setShowLogMealSheet(true)}>
                             <Text style={styles.primaryButtonText}>Log a meal</Text>

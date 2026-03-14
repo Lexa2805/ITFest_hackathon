@@ -10,7 +10,7 @@ import httpx
 
 from app.schemas.profile import DownstreamCallResult, ManualHealthDataRequest
 from app.services.physical_state_service import calculate_physical_state
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 
 AGENT_SERVICE_BASE_URL = os.getenv("AGENT_SERVICE_BASE_URL", "http://localhost:8000").rstrip("/")
@@ -50,13 +50,14 @@ def _build_manual_saved_payload(
     }
 
 
-def _save_manual_checkin_legacy_daily_logs(
+async def _save_manual_checkin_legacy_daily_logs(
     user_id: str,
     payload: ManualHealthDataRequest,
     checkin_date: date,
     physical_state_score: int,
 ) -> dict:
     # Legacy compatibility mode for projects that still have daily_logs but not daily_checkins.
+    supabase = await get_supabase()
     row = {
         "user_id": user_id,
         "date": checkin_date.isoformat(),
@@ -82,7 +83,7 @@ def _save_manual_checkin_legacy_daily_logs(
     saved_row: dict | None = None
 
     try:
-        result = (
+        result = await (
             supabase.table(LEGACY_CHECKINS_TABLE)
             .upsert(row, on_conflict="user_id,date")
             .execute()
@@ -91,12 +92,12 @@ def _save_manual_checkin_legacy_daily_logs(
             saved_row = result.data[0]
     except Exception:
         # If legacy table has no compound unique key, fallback to insert/select flow.
-        inserted = supabase.table(LEGACY_CHECKINS_TABLE).insert(row).execute()
+        inserted = await supabase.table(LEGACY_CHECKINS_TABLE).insert(row).execute()
         if inserted.data:
             saved_row = inserted.data[0]
 
     if not saved_row:
-        fallback = (
+        fallback = await (
             supabase.table(LEGACY_CHECKINS_TABLE)
             .select("*")
             .eq("user_id", user_id)
@@ -118,6 +119,7 @@ def _save_manual_checkin_legacy_daily_logs(
 
 async def save_manual_checkin(user_id: str, payload: ManualHealthDataRequest) -> dict:
     """Store one daily check-in and compute physical state score using health-system logic."""
+    supabase = await get_supabase()
     checkin_date = payload.date or date.today()
     physical_state = calculate_physical_state(
         heart_rates=[payload.heart_rate],
@@ -140,7 +142,7 @@ async def save_manual_checkin(user_id: str, payload: ManualHealthDataRequest) ->
     }
 
     try:
-        result = (
+        result = await (
             supabase.table(PRIMARY_CHECKINS_TABLE)
             .upsert(row, on_conflict="user_id,date")
             .execute()
@@ -149,7 +151,7 @@ async def save_manual_checkin(user_id: str, payload: ManualHealthDataRequest) ->
         if result.data:
             saved = result.data[0]
         else:
-            fallback = (
+            fallback = await (
                 supabase.table(PRIMARY_CHECKINS_TABLE)
                 .select("*")
                 .eq("user_id", user_id)
@@ -162,7 +164,7 @@ async def save_manual_checkin(user_id: str, payload: ManualHealthDataRequest) ->
             saved = fallback.data[0]
     except Exception as exc:
         if _looks_like_missing_table_error(exc, PRIMARY_CHECKINS_TABLE):
-            saved = _save_manual_checkin_legacy_daily_logs(
+            saved = await _save_manual_checkin_legacy_daily_logs(
                 user_id=user_id,
                 payload=payload,
                 checkin_date=checkin_date,

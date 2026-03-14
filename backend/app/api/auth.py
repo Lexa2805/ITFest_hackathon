@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from supabase_auth.errors import AuthApiError
 
 from app.schemas.auth import AuthRequest, AuthResponse, UserOut
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -20,8 +20,9 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 )
 async def signup(body: AuthRequest):
     """Create a new user account via Supabase Auth."""
+    supabase = await get_supabase()
     try:
-        result = supabase.auth.sign_up(
+        result = await supabase.auth.sign_up(
             {"email": body.email, "password": body.password}
         )
     except AuthApiError as exc:
@@ -66,8 +67,9 @@ async def signup(body: AuthRequest):
 )
 async def login(body: AuthRequest):
     """Sign in with email + password via Supabase Auth."""
+    supabase = await get_supabase()
     try:
-        result = supabase.auth.sign_in_with_password(
+        result = await supabase.auth.sign_in_with_password(
             {"email": body.email, "password": body.password}
         )
     except AuthApiError as exc:

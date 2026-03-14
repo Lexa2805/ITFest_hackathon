@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.schemas.profile import ProfileUpsertRequest
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 
 async def upsert_profile(user_id: str, profile: ProfileUpsertRequest) -> dict:
     """Create or update profile data for a user with upsert semantics."""
+    supabase = await get_supabase()
     payload = {
         "user_id": user_id,
         "name": profile.name,
@@ -24,11 +25,11 @@ async def upsert_profile(user_id: str, profile: ProfileUpsertRequest) -> dict:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    result = supabase.table("profiles").upsert(payload, on_conflict="user_id").execute()
+    result = await supabase.table("profiles").upsert(payload, on_conflict="user_id").execute()
     if result.data:
         return result.data[0]
 
-    fallback = (
+    fallback = await (
         supabase.table("profiles")
         .select("*")
         .eq("user_id", user_id)
@@ -43,7 +44,8 @@ async def upsert_profile(user_id: str, profile: ProfileUpsertRequest) -> dict:
 
 async def get_profile(user_id: str) -> dict | None:
     """Fetch profile for a user; return None if no profile exists."""
-    result = supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()
+    supabase = await get_supabase()
+    result = await supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()
     if not result.data:
         return None
     return result.data[0]

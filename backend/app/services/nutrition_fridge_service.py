@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from app.schemas.nutrition_agent import FridgeIngredientCreateRequest, FridgeIngredientResponse
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 TABLE = "fridge_items"
 
@@ -30,6 +30,7 @@ async def add_ingredient(user_id: str, body: FridgeIngredientCreateRequest) -> F
 
     We attempt the requested schema first (`ingredient_name`) then fallback to legacy (`name`).
     """
+    supabase = await get_supabase()
     payload_primary = {
         "user_id": user_id,
         "ingredient_name": body.name,
@@ -37,7 +38,7 @@ async def add_ingredient(user_id: str, body: FridgeIngredientCreateRequest) -> F
         "unit": body.unit,
     }
     try:
-        result = supabase.table(TABLE).insert(payload_primary).execute()
+        result = await supabase.table(TABLE).insert(payload_primary).execute()
     except Exception:
         payload_legacy = {
             "user_id": user_id,
@@ -46,7 +47,7 @@ async def add_ingredient(user_id: str, body: FridgeIngredientCreateRequest) -> F
             "unit": body.unit,
             "category": "other",
         }
-        result = supabase.table(TABLE).insert(payload_legacy).execute()
+        result = await supabase.table(TABLE).insert(payload_legacy).execute()
 
     if not result.data:
         raise HTTPException(
@@ -58,7 +59,8 @@ async def add_ingredient(user_id: str, body: FridgeIngredientCreateRequest) -> F
 
 async def get_ingredients(user_id: str) -> list[FridgeIngredientResponse]:
     """List all ingredients owned by a user."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .select("*")
         .eq("user_id", user_id)
@@ -70,7 +72,8 @@ async def get_ingredients(user_id: str) -> list[FridgeIngredientResponse]:
 
 async def delete_ingredient(user_id: str, ingredient_id: UUID) -> None:
     """Delete an ingredient by id scoped to user id."""
-    result = (
+    supabase = await get_supabase()
+    result = await (
         supabase.table(TABLE)
         .delete()
         .eq("id", str(ingredient_id))

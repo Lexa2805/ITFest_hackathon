@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 from app.schemas.nutrition import NutritionGoalCreate, NutritionGoalResponse, DailyLogResponse
 
 GOALS_TABLE = "user_nutrition_goals"
@@ -17,8 +17,9 @@ def _safe_data(result) -> object:
 
 
 async def set_or_update_goal(user_id: str, goal: NutritionGoalCreate) -> NutritionGoalResponse:
+    supabase = await get_supabase()
     # Check if a goal already exists
-    result = supabase.table(GOALS_TABLE).select("id").eq("user_id", user_id).maybe_single().execute()
+    result = await supabase.table(GOALS_TABLE).select("id").eq("user_id", user_id).maybe_single().execute()
     payload = {"user_id": user_id, **goal.model_dump(mode="json")}
     existing_goal = _safe_data(result)
     
@@ -26,14 +27,14 @@ async def set_or_update_goal(user_id: str, goal: NutritionGoalCreate) -> Nutriti
         # Update existing goal
         # Provide updated_at
         payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        updated = supabase.table(GOALS_TABLE).update(payload).eq("user_id", user_id).execute()
+        updated = await supabase.table(GOALS_TABLE).update(payload).eq("user_id", user_id).execute()
         updated_data = _safe_data(updated)
         if not updated_data:
             raise HTTPException(status_code=500, detail="Failed to update goal.")
         return NutritionGoalResponse(**updated_data[0])
     
     # Insert new goal
-    inserted = supabase.table(GOALS_TABLE).insert(payload).execute()
+    inserted = await supabase.table(GOALS_TABLE).insert(payload).execute()
     inserted_data = _safe_data(inserted)
     if not inserted_data:
         raise HTTPException(status_code=500, detail="Failed to set goal.")
@@ -41,7 +42,8 @@ async def set_or_update_goal(user_id: str, goal: NutritionGoalCreate) -> Nutriti
 
 
 async def get_goal(user_id: str) -> NutritionGoalResponse:
-    result = supabase.table(GOALS_TABLE).select("*").eq("user_id", user_id).maybe_single().execute()
+    supabase = await get_supabase()
+    result = await supabase.table(GOALS_TABLE).select("*").eq("user_id", user_id).maybe_single().execute()
     goal_data = _safe_data(result)
     if not goal_data:
         raise HTTPException(status_code=404, detail="Nutrition goals not set.")
@@ -49,8 +51,9 @@ async def get_goal(user_id: str) -> NutritionGoalResponse:
 
 
 async def _get_today_log(user_id: str) -> dict:
+    supabase = await get_supabase()
     today_str = datetime.date.today().isoformat()
-    result = supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).eq("date", today_str).maybe_single().execute()
+    result = await supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).eq("date", today_str).maybe_single().execute()
     log_data = _safe_data(result)
     if log_data:
         return log_data
@@ -65,7 +68,7 @@ async def _get_today_log(user_id: str) -> dict:
         "total_carbs_g": 0,
         "total_fat_g": 0,
     }
-    inserted = supabase.table(LOGS_TABLE).insert(new_log).execute()
+    inserted = await supabase.table(LOGS_TABLE).insert(new_log).execute()
     inserted_data = _safe_data(inserted)
     if not inserted_data:
         raise HTTPException(status_code=500, detail="Failed to initialize daily log.")
@@ -92,7 +95,8 @@ async def log_recipe_meal(user_id: str, recipe: dict) -> DailyLogResponse:
     total_carbs_g = log_data["total_carbs_g"] + recipe["carbs_g"]
     total_fat_g = log_data["total_fat_g"] + recipe["fat_g"]
     
-    updated = supabase.table(LOGS_TABLE).update({
+    supabase = await get_supabase()
+    updated = await supabase.table(LOGS_TABLE).update({
         "meals": meals,
         "total_calories": total_calories,
         "total_protein_g": total_protein_g,
@@ -114,8 +118,9 @@ async def get_today_log_with_goals(user_id: str) -> DailyLogResponse:
 
 
 async def get_history_logs(user_id: str) -> list[DailyLogResponse]:
+    supabase = await get_supabase()
     # Returns last 7 days
-    result = supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).order("date", desc=True).limit(7).execute()
+    result = await supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).order("date", desc=True).limit(7).execute()
     logs = _safe_data(result) or []
     
     try:

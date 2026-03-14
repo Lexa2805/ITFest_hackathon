@@ -101,6 +101,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="chatbubbles" color={color} size={24} />
+          ),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="health-upload"
         options={{
           title: 'Health',
@@ -108,6 +118,10 @@ export default function TabLayout() {
             <Ionicons name="pulse" color={color} size={24} />
           ),
         }}
+      />
+      <Tabs.Screen
+        name="nutrition.mock"
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="profile"

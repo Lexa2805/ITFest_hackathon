@@ -1,8 +1,9 @@
-"""Claude-powered meal-plan generation service."""
+"""GPT-5.1-powered meal-plan generation service."""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import date, datetime, timezone
@@ -10,13 +11,18 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 
 from app.schemas.nutrition_agent import MealPlanMeal, MealPlanResponse
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
+
+logger = logging.getLogger(__name__)
 
 MEAL_PLANS_TABLE = "meal_plans"
 FRIDGE_TABLE = "fridge_items"
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "openai/gpt-5.1"
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 async def generate_daily_meal_plan(
@@ -33,7 +39,7 @@ async def generate_daily_meal_plan(
             detail="No fridge ingredients found for this user.",
         )
 
-    plan_json = await _call_claude_for_plan(
+    plan_json = await _call_llm_for_plan(
         ingredients=ingredients,
         daily_kcal_target=daily_kcal_target,
         macro_targets=macro_targets,
@@ -51,23 +57,29 @@ async def generate_daily_meal_plan(
         "total_carbs": normalized["total_carbs_g"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    supabase.table(MEAL_PLANS_TABLE).insert(payload).execute()
+    supabase = await get_supabase()
+    await supabase.table(MEAL_PLANS_TABLE).insert(payload).execute()
 
     return MealPlanResponse(**normalized)
 
 
 async def get_latest_plan(user_id: str) -> MealPlanResponse | None:
     """Fetch the most recently generated meal plan for today."""
+    supabase = await get_supabase()
     today = date.today().isoformat()
-    result = (
-        supabase.table(MEAL_PLANS_TABLE)
-        .select("plan_json")
-        .eq("user_id", user_id)
-        .eq("date", today)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
+    try:
+        result = await (
+            supabase.table(MEAL_PLANS_TABLE)
+            .select("plan_json")
+            .eq("user_id", user_id)
+            .eq("date", today)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except APIError as exc:
+        logger.warning("meal_plans query failed: %s", exc)
+        return None
     if not result.data:
         return None
     return MealPlanResponse(**result.data[0]["plan_json"])
@@ -75,14 +87,19 @@ async def get_latest_plan(user_id: str) -> MealPlanResponse | None:
 
 async def _load_fridge_ingredients(user_id: str) -> list[dict[str, Any]]:
     """Load current fridge ingredients and normalize naming across schema versions."""
-    result = (
-        supabase.table(FRIDGE_TABLE)
-        .select("*")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    rows = result.data or []
+    supabase = await get_supabase()
+    try:
+        result = await (
+            supabase.table(FRIDGE_TABLE)
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = result.data or []
+    except APIError as exc:
+        logger.warning("fridge_items query failed: %s", exc)
+        rows = []
     normalized: list[dict[str, Any]] = []
     for row in rows:
         ingredient_name = row.get("ingredient_name") or row.get("name")
@@ -98,18 +115,19 @@ async def _load_fridge_ingredients(user_id: str) -> list[dict[str, Any]]:
     return normalized
 
 
-async def _call_claude_for_plan(
+
+async def _call_llm_for_plan(
     *,
     ingredients: list[dict[str, Any]],
     daily_kcal_target: int,
     macro_targets: dict[str, int],
 ) -> dict[str, Any]:
-    """Call Anthropic Messages API and parse JSON plan output."""
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    """Call GPT-5.1 via OpenRouter and parse JSON plan output."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="ANTHROPIC_API_KEY is missing.",
+            detail="OPENROUTER_API_KEY is missing.",
         )
 
     system_prompt = (
@@ -155,50 +173,50 @@ async def _call_claude_for_plan(
         "model": MODEL,
         "max_tokens": 2000,
         "temperature": 0.2,
-        "system": system_prompt,
-        "messages": [{"role": "user", "content": json.dumps(user_prompt)}],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_prompt)},
+        ],
     }
 
     headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://personal-health-os.app",
+        "X-Title": "Personal Health OS",
     }
 
     async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload)
+        response = await client.post(OPENROUTER_BASE_URL, headers=headers, json=payload)
 
     if response.status_code >= 400:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Claude API error: {response.text}",
+            detail=f"OpenRouter API error: {response.text}",
         )
 
     body = response.json()
-    content_blocks = body.get("content") or []
-    text_output = ""
-    for block in content_blocks:
-        if block.get("type") == "text":
-            text_output += block.get("text", "")
+    text_output = body["choices"][0]["message"]["content"].strip()
 
     if not text_output:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Claude API returned empty content.",
+            detail="GPT returned empty content.",
         )
 
     cleaned = re.sub(r"```(?:json)?", "", text_output).replace("```", "").strip()
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        # Fallback: parse the first object in the response if extra text slipped in.
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
         if not match:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Claude response was not valid JSON.",
+                detail="GPT response was not valid JSON.",
             )
         return json.loads(match.group())
+
+
 
 
 def _normalize_plan_json(plan: dict[str, Any]) -> dict[str, Any]:

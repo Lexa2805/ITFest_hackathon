@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 
 from app.schemas.nutrition_agent import CalorieCalculationResponse
-from app.services.supabase_client import supabase
+from app.services.supabase_client import get_supabase
 
 _ACTIVITY_MULTIPLIERS: dict[str, float] = {
     "sedentary": 1.2,
@@ -95,6 +95,7 @@ async def calculate_daily_targets(
 
 async def save_targets_to_profile(user_id: str, results: CalorieCalculationResponse) -> dict:
     """Persist the calculated targets on the user's profile row."""
+    supabase = await get_supabase()
     payload = {
         "user_id": user_id,
         "daily_kcal_target": results.daily_kcal_target,
@@ -102,7 +103,7 @@ async def save_targets_to_profile(user_id: str, results: CalorieCalculationRespo
         "fat_target_g": results.fat_g,
         "carbs_target_g": results.carbs_g,
     }
-    response = supabase.table("profiles").upsert(payload, on_conflict="user_id").execute()
+    response = await supabase.table("profiles").upsert(payload, on_conflict="user_id").execute()
     if not response.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
