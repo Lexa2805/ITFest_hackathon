@@ -43,18 +43,21 @@ async def fetch_goals(user_id: str = Depends(get_current_user_id)):
 
 @router.post("/recipes/suggest", response_model=list[RecipeResponse], summary="Suggest recipes based on fridge and goals")
 async def suggest_recipes(
+    force_regenerate: bool = False,
     user_id: str = Depends(get_current_user_id),
     token: str = Depends(get_token)
 ):
     """
     Combines fridge inventory with user goals to suggest 3-5 recipes via OpenRouter AI.
+    If force_regenerate=False (default), returns today's cached recipes if available.
+    If force_regenerate=True, generates new recipes via AI.
     """
-    return await recipe_service.suggest_recipes(user_id, token)
+    return await recipe_service.suggest_recipes(user_id, token, force_regenerate)
 
 
 @router.get("/recipes", response_model=list[RecipeResponse], summary="List previously generated recipes")
-async def list_recipes(user_id: str = Depends(get_current_user_id)):
-    return await recipe_service.get_user_recipes(user_id)
+async def list_recipes(limit: int = 10, user_id: str = Depends(get_current_user_id)):
+    return await recipe_service.get_user_recipes(user_id, limit)
 
 
 @router.post("/recipes/{id}/log", response_model=DailyLogResponse, summary="Log a recipe as a meal today")
@@ -83,10 +86,16 @@ async def get_history(user_id: str = Depends(get_current_user_id)):
 
 @router.post("/shopping-list/generate", response_model=ShoppingListResponse, summary="Generate shopping list for missing ingredients")
 async def generate_shopping_list(
+    force_regenerate: bool = False,
     user_id: str = Depends(get_current_user_id),
     token: str = Depends(get_token)
 ):
-    return await shopping_service.generate_shopping_list(user_id, token)
+    """
+    Generates a shopping list by comparing fridge inventory with recipe ingredients.
+    If force_regenerate=False (default), returns today's cached list if available.
+    If force_regenerate=True, generates a new list via AI.
+    """
+    return await shopping_service.generate_shopping_list(user_id, token, force_regenerate)
 
 
 @router.get("/shopping-list/latest", response_model=ShoppingListResponse, summary="Get the latest generated shopping list")

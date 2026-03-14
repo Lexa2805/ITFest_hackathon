@@ -32,7 +32,17 @@ Return ONLY a valid JSON array of the MISSING ingredients to form a shopping lis
 Do NOT wrap the JSON in markdown code fences. Return raw JSON only."""
 
 
-async def generate_shopping_list(user_id: str, token: str) -> ShoppingListResponse:
+async def generate_shopping_list(user_id: str, token: str, force_regenerate: bool = False) -> ShoppingListResponse:
+    # Check if we have a shopping list generated today
+    if not force_regenerate:
+        today = datetime.date.today().isoformat()
+        result = supabase.table(SHOPPING_LIST_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).limit(1).execute()
+        existing_list = _safe_data(result)
+        
+        if existing_list and len(existing_list) > 0:
+            logger.info(f"Returning cached shopping list for user {user_id} from today")
+            return ShoppingListResponse(**existing_list[0])
+    
     # 1. Fetch fridge inventory
     try:
         inventory = await fetch_fridge_inventory(token)

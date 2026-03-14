@@ -98,7 +98,17 @@ def _fallback_recipes_from_inventory(inventory: list[dict]) -> list[dict]:
 
     return recipes
 
-async def suggest_recipes(user_id: str, token: str) -> list[RecipeResponse]:
+async def suggest_recipes(user_id: str, token: str, force_regenerate: bool = False) -> list[RecipeResponse]:
+    # Check if we have recipes generated today
+    if not force_regenerate:
+        today = datetime.date.today().isoformat()
+        result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).gte("generated_at", f"{today}T00:00:00").order("generated_at", desc=True).execute()
+        existing_recipes = _safe_data(result) or []
+        
+        if existing_recipes and len(existing_recipes) >= 3:
+            logger.info(f"Returning {len(existing_recipes)} cached recipes for user {user_id} from today")
+            return [RecipeResponse(**row) for row in existing_recipes]
+    
     # 1. Fetch fridge inventory
     inventory = _normalize_inventory(await fetch_fridge_inventory(token))
     
@@ -200,8 +210,8 @@ async def suggest_recipes(user_id: str, token: str) -> list[RecipeResponse]:
             
     return saved_recipes
 
-async def get_user_recipes(user_id: str) -> list[RecipeResponse]:
-    result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).execute()
+async def get_user_recipes(user_id: str, limit: int = 10) -> list[RecipeResponse]:
+    result = supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).order("generated_at", desc=True).limit(limit).execute()
     return [RecipeResponse(**row) for row in (_safe_data(result) or [])]
 
 async def get_recipe(user_id: str, recipe_id: str) -> dict:

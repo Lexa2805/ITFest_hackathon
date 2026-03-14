@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MacroProgressRow } from '@/components/nutrition/MacroProgressRow';
@@ -55,22 +55,41 @@ export default function NutritionScreen() {
     const [loadingLog, setLoadingLog] = useState(true);
     const [loadingRecipes, setLoadingRecipes] = useState(true);
     const [loadingShopping, setLoadingShopping] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     const [log, setLog] = useState<DailyLogResponse | null>(null);
     const [recipes, setRecipes] = useState<RecipeResponse[]>([]);
     const [shoppingList, setShoppingList] = useState<ShoppingListResponse | null>(null);
 
-    useEffect(() => {
+    const [logError, setLogError] = useState<string | null>(null);
+    const [recipesError, setRecipesError] = useState<string | null>(null);
+
+    const loadData = async (forceRegenerate: boolean = false) => {
+        // Load daily log
         getTodayLog()
-            .then(setLog)
-            .catch(err => console.error("Error loading daily log:", err, err.response?.data))
+            .then(data => {
+                setLog(data);
+                setLogError(null);
+            })
+            .catch(err => {
+                console.error("Error loading daily log:", err, err.response?.data);
+                setLogError("Failed to load nutrition data");
+            })
             .finally(() => setLoadingLog(false));
 
-        suggestRecipes()
-            .then(setRecipes)
-            .catch(err => console.error("Error suggesting recipes:", err, err.response?.data))
+        // Load recipes (cached by default, regenerate on pull-to-refresh)
+        suggestRecipes(forceRegenerate)
+            .then(data => {
+                setRecipes(data);
+                setRecipesError(null);
+            })
+            .catch(err => {
+                console.error("Error suggesting recipes:", err, err.response?.data);
+                setRecipesError("Failed to generate recipes");
+            })
             .finally(() => setLoadingRecipes(false));
 
+        // Load shopping list
         getLatestShoppingList()
             .then(setShoppingList)
             .catch(err => {
@@ -79,6 +98,33 @@ export default function NutritionScreen() {
                 }
             })
             .finally(() => setLoadingShopping(false));
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        setLoadingLog(true);
+        setLoadingRecipes(true);
+        setLoadingShopping(true);
+        await loadData(true); // Force regenerate on refresh
+        setRefreshing(false);
+    };
+
+    const handleRegenerateRecipes = async () => {
+        setLoadingRecipes(true);
+        setRecipesError(null);
+        try {
+            const data = await suggestRecipes(true); // Force regenerate
+            setRecipes(data);
+        } catch (err: any) {
+            console.error("Error regenerating recipes:", err, err.response?.data);
+            setRecipesError("Failed to regenerate recipes");
+        } finally {
+            setLoadingRecipes(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData(false); // Load cached data on mount
     }, []);
 
     const targetCalories = log?.goal_calories ?? 2000;
@@ -101,7 +147,13 @@ export default function NutritionScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                contentContainerStyle={styles.content} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.accent} />
+                }
+            >
                 <View style={styles.headerBlock}>
                     <View style={styles.headerTextBlock}>
                         <Text style={styles.headerTitle}>{nutritionHeader.title}</Text>
@@ -119,7 +171,13 @@ export default function NutritionScreen() {
                 </ScrollView>
 
                 <NutritionCard title="Daily Nutrition Summary" subtitle="Stay aligned with your target intake">
-                    <View style={styles.summaryStatsRow}>
+                    {logError ? (
+                        <Text style={{ textAlign: 'center', color: '#FF6B6B', marginVertical: 20 }}>
+                            {logError}
+                        </Text>
+                    ) : (
+                        <>
+                            <View style={styles.summaryStatsRow}>
                         <View style={styles.summaryStatCard}>
                             <Text style={styles.summaryStatLabel}>Target</Text>
                             <Text style={styles.summaryStatValue}>{targetCalories}</Text>
@@ -148,16 +206,43 @@ export default function NutritionScreen() {
                             />
                         ))}
                     </View>
+                        </>
+                    )}
                 </NutritionCard>
 
                 <View>
-                    <SectionHeader
-                        title="Cook with what you have"
-                        subtitle="Recipe picks from ingredients currently in your fridge"
-                    />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <View style={{ flex: 1 }}>
+                            <SectionHeader
+                                title="Cook with what you have"
+                                subtitle="Recipe picks from ingredients currently in your fridge"
+                            />
+                        </View>
+                        {recipes.length > 0 && !loadingRecipes && (
+                            <Pressable 
+                                onPress={handleRegenerateRecipes}
+                                style={{ 
+                                    paddingHorizontal: 12, 
+                                    paddingVertical: 6, 
+                                    borderRadius: 8, 
+                                    backgroundColor: C.softCard,
+                                    borderWidth: 1,
+                                    borderColor: C.border
+                                }}
+                            >
+                                <Text style={{ color: C.accent, fontSize: 12, fontWeight: '600' }}>
+                                    Regenerate
+                                </Text>
+                            </Pressable>
+                        )}
+                    </View>
                     <View style={styles.verticalList}>
                         {loadingRecipes ? (
                             <ActivityIndicator size="small" color={C.accent} style={{ marginVertical: 20 }} />
+                        ) : recipesError ? (
+                            <Text style={{ textAlign: 'center', color: '#FF6B6B', marginVertical: 20 }}>
+                                {recipesError}
+                            </Text>
                         ) : recipes.length > 0 ? (
                             recipes.map((recipe) => (
                                 <RecipeSuggestionCard
