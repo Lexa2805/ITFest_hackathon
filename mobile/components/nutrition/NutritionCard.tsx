@@ -19,13 +19,13 @@ export function NutritionCard({ title, subtitle, children }: NutritionCardProps)
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#141414',
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#E7EBF0',
+        borderColor: '#1E1E1E',
         padding: 16,
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.06,
+        shadowColor: '#000000',
+        shadowOpacity: 0.2,
         shadowOffset: { width: 0, height: 6 },
         shadowRadius: 14,
         elevation: 2,
@@ -33,12 +33,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#111827',
+        color: '#F5F5F5',
     },
     subtitle: {
         marginTop: 2,
         fontSize: 13,
-        color: '#6B7280',
+        color: '#93A19A',
     },
     content: {
         marginTop: 12,

@@ -40,10 +40,10 @@ export function RecipeSuggestionCard({
 const styles = StyleSheet.create({
     card: {
         borderWidth: 1,
-        borderColor: '#E7EBF0',
+        borderColor: '#1E1E1E',
         borderRadius: 16,
         padding: 14,
-        backgroundColor: '#FCFDFF',
+        backgroundColor: '#141414',
         gap: 8,
     },
     topRow: {
@@ -54,28 +54,28 @@ const styles = StyleSheet.create({
     },
     name: {
         flex: 1,
-        color: '#111827',
+        color: '#F5F5F5',
         fontSize: 15,
         fontWeight: '700',
     },
     tagPill: {
-        backgroundColor: '#EEF3FF',
+        backgroundColor: 'rgba(0,230,118,0.15)',
         borderRadius: 999,
         paddingHorizontal: 10,
         paddingVertical: 5,
     },
     tagText: {
         fontSize: 11,
-        color: '#4062D9',
+        color: '#00E676',
         fontWeight: '700',
     },
     meta: {
-        color: '#64748B',
+        color: '#93A19A',
         fontSize: 12,
         fontWeight: '600',
     },
     description: {
-        color: '#475569',
+        color: '#C8D1CC',
         fontSize: 13,
         lineHeight: 19,
     },
@@ -83,12 +83,12 @@ const styles = StyleSheet.create({
         marginTop: 4,
         alignSelf: 'flex-start',
         borderRadius: 12,
-        backgroundColor: '#E8F5EE',
+        backgroundColor: 'rgba(0,230,118,0.15)',
         paddingHorizontal: 12,
         paddingVertical: 8,
     },
     ctaText: {
-        color: '#1C7C54',
+        color: '#00E676',
         fontSize: 12,
         fontWeight: '700',
     },

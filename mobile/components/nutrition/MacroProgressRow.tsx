@@ -38,19 +38,19 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 13,
-        color: '#374151',
+        color: '#C8D1CC',
         fontWeight: '600',
     },
     value: {
         fontSize: 12,
-        color: '#6B7280',
+        color: '#93A19A',
         fontWeight: '500',
     },
     track: {
         width: '100%',
         height: 8,
         borderRadius: 99,
-        backgroundColor: '#E9EEF5',
+        backgroundColor: '#1E1E1E',
         overflow: 'hidden',
     },
     fill: {

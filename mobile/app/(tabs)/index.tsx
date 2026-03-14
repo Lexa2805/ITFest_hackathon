@@ -54,17 +54,17 @@ const workoutSuggestion = {
 const shoppingItems = ['Avocado', 'Chia Seeds', 'Bell Pepper'];
 
 const C = {
-  background: '#F4F6F8',
-  card: '#FFFFFF',
-  border: '#E7EBF0',
-  title: '#111827',
-  body: '#374151',
-  muted: '#6B7280',
-  accent: '#4F7BFF',
-  accentSoft: '#EEF3FF',
-  good: '#2E8B57',
-  warn: '#C88719',
-  alert: '#C94646',
+  background: '#0A0A0A',
+  card: '#141414',
+  border: '#1E1E1E',
+  title: '#F5F5F5',
+  body: '#C8D1CC',
+  muted: '#93A19A',
+  accent: '#00E676',
+  accentSoft: 'rgba(0,230,118,0.15)',
+  good: '#00E676',
+  warn: '#FFD166',
+  alert: '#FF6B6B',
 } as const;
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     padding: 16,
-    shadowColor: '#0F172A',
+    shadowColor: '#000000',
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 14,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     padding: 14,
-    shadowColor: '#0F172A',
+    shadowColor: '#000000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 5 },
     shadowRadius: 10,

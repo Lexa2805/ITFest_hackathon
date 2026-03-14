@@ -22,6 +22,18 @@ import {
     recommendedMeals,
 } from './nutrition.mock';
 
+const C = {
+    bg: '#0A0A0A',
+    card: '#141414',
+    softCard: '#121A15',
+    border: '#1E1E1E',
+    text: '#F5F5F5',
+    body: '#C8D1CC',
+    muted: '#93A19A',
+    accent: '#00E676',
+    accentSoft: 'rgba(0,230,118,0.15)',
+} as const;
+
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
     return (
         <View style={styles.sectionHeader}>
@@ -53,12 +65,12 @@ export default function NutritionScreen() {
             .then(setLog)
             .catch(err => console.error("Error loading daily log:", err, err.response?.data))
             .finally(() => setLoadingLog(false));
-            
+
         suggestRecipes()
             .then(setRecipes)
             .catch(err => console.error("Error suggesting recipes:", err, err.response?.data))
             .finally(() => setLoadingRecipes(false));
-            
+
         getLatestShoppingList()
             .then(setShoppingList)
             .catch(err => {
@@ -74,15 +86,15 @@ export default function NutritionScreen() {
     const remainingCalories = Math.max(0, targetCalories - consumedCalories);
 
     const macroTargetsData = [
-        { label: 'Protein', current: log?.total_protein_g ?? 0, target: log?.goal_protein_g ?? 150, accentColor: '#5B8DEF' },
-        { label: 'Carbs', current: log?.total_carbs_g ?? 0, target: log?.goal_carbs_g ?? 200, accentColor: '#6EC8A8' },
-        { label: 'Fats', current: log?.total_fat_g ?? 0, target: log?.goal_fat_g ?? 70, accentColor: '#F5A66B' },
+        { label: 'Protein', current: log?.total_protein_g ?? 0, target: log?.goal_protein_g ?? 150, accentColor: '#00E676' },
+        { label: 'Carbs', current: log?.total_carbs_g ?? 0, target: log?.goal_carbs_g ?? 200, accentColor: '#3DDC97' },
+        { label: 'Fats', current: log?.total_fat_g ?? 0, target: log?.goal_fat_g ?? 70, accentColor: '#FFD166' },
     ];
 
     if (loadingLog) {
         return (
             <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#4062D9" />
+                <ActivityIndicator size="large" color={C.accent} />
             </SafeAreaView>
         );
     }
@@ -96,7 +108,7 @@ export default function NutritionScreen() {
                         <Text style={styles.headerSubtitle}>{nutritionHeader.subtitle}</Text>
                     </View>
                     <Pressable style={styles.filterAction}>
-                        <Ionicons name="options-outline" size={18} color="#1F2937" />
+                        <Ionicons name="options-outline" size={18} color={C.text} />
                     </Pressable>
                 </View>
 
@@ -145,7 +157,7 @@ export default function NutritionScreen() {
                     />
                     <View style={styles.verticalList}>
                         {loadingRecipes ? (
-                            <ActivityIndicator size="small" color="#4062D9" style={{ marginVertical: 20 }} />
+                            <ActivityIndicator size="small" color={C.accent} style={{ marginVertical: 20 }} />
                         ) : recipes.length > 0 ? (
                             recipes.map((recipe) => (
                                 <RecipeSuggestionCard
@@ -158,7 +170,7 @@ export default function NutritionScreen() {
                                 />
                             ))
                         ) : (
-                            <Text style={{ textAlign: 'center', color: '#6B7280', marginVertical: 20 }}>
+                            <Text style={{ textAlign: 'center', color: C.muted, marginVertical: 20 }}>
                                 No recipes could be generated right now.
                             </Text>
                         )}
@@ -167,7 +179,7 @@ export default function NutritionScreen() {
 
                 <NutritionCard title="Missing Ingredients" subtitle="For selected recipes">
                     {loadingShopping ? (
-                        <ActivityIndicator size="small" color="#1C7C54" style={{ marginVertical: 20 }} />
+                        <ActivityIndicator size="small" color={C.accent} style={{ marginVertical: 20 }} />
                     ) : shoppingList?.items && shoppingList.items.length > 0 ? (
                         <>
                             {shoppingList.items.map((item, index) => (
@@ -183,7 +195,7 @@ export default function NutritionScreen() {
                             </Pressable>
                         </>
                     ) : (
-                        <Text style={{ textAlign: 'center', color: '#6B7280', marginVertical: 20 }}>
+                        <Text style={{ textAlign: 'center', color: C.muted, marginVertical: 20 }}>
                             You have all ingredients in your fridge!
                         </Text>
                     )}
@@ -205,7 +217,7 @@ export default function NutritionScreen() {
                 </View>
 
                 <View style={styles.healthAwareBanner}>
-                    <Ionicons name="sparkles-outline" size={18} color="#4062D9" />
+                    <Ionicons name="sparkles-outline" size={18} color={C.accent} />
                     <Text style={styles.healthAwareText}>{healthAwareMessage}</Text>
                 </View>
             </ScrollView>
@@ -216,7 +228,7 @@ export default function NutritionScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#F4F6F8',
+        backgroundColor: C.bg,
     },
     content: {
         paddingHorizontal: 18,
@@ -237,23 +249,23 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 28,
         fontWeight: '800',
-        color: '#111827',
+        color: C.text,
         letterSpacing: 0.2,
     },
     headerSubtitle: {
         fontSize: 14,
         lineHeight: 21,
-        color: '#4B5563',
+        color: C.body,
     },
     filterAction: {
         width: 36,
         height: 36,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#E5EAF1',
+        borderColor: C.border,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: C.card,
     },
     filtersRow: {
         gap: 8,
@@ -261,14 +273,14 @@ const styles = StyleSheet.create({
     },
     filterChip: {
         borderRadius: 999,
-        backgroundColor: '#EDF2FA',
+        backgroundColor: C.softCard,
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: C.border,
     },
     filterChipText: {
-        color: '#334155',
+        color: C.text,
         fontSize: 12,
         fontWeight: '600',
     },
@@ -278,29 +290,29 @@ const styles = StyleSheet.create({
     },
     summaryStatCard: {
         flex: 1,
-        backgroundColor: '#F8FAFD',
+        backgroundColor: C.softCard,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: '#E7ECF4',
+        borderColor: C.border,
         paddingVertical: 10,
         paddingHorizontal: 10,
         alignItems: 'center',
         gap: 2,
     },
     summaryStatLabel: {
-        color: '#64748B',
+        color: C.muted,
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     summaryStatValue: {
-        color: '#111827',
+        color: C.text,
         fontSize: 19,
         fontWeight: '800',
     },
     summaryStatUnit: {
-        color: '#64748B',
+        color: C.muted,
         fontSize: 11,
         fontWeight: '500',
     },
@@ -313,12 +325,12 @@ const styles = StyleSheet.create({
         gap: 2,
     },
     sectionTitle: {
-        color: '#111827',
+        color: C.text,
         fontSize: 18,
         fontWeight: '700',
     },
     sectionSubtitle: {
-        color: '#6B7280',
+        color: C.muted,
         fontSize: 13,
     },
     verticalList: {
@@ -327,12 +339,12 @@ const styles = StyleSheet.create({
     shoppingCta: {
         marginTop: 4,
         borderRadius: 12,
-        backgroundColor: '#E8F5EE',
+        backgroundColor: C.accentSoft,
         paddingVertical: 11,
         alignItems: 'center',
     },
     shoppingCtaText: {
-        color: '#1C7C54',
+        color: C.accent,
         fontSize: 13,
         fontWeight: '700',
     },
@@ -343,8 +355,8 @@ const styles = StyleSheet.create({
     healthAwareBanner: {
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#E4EAFA',
-        backgroundColor: '#F5F8FF',
+        borderColor: C.border,
+        backgroundColor: C.softCard,
         padding: 14,
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -353,7 +365,7 @@ const styles = StyleSheet.create({
     },
     healthAwareText: {
         flex: 1,
-        color: '#334155',
+        color: C.body,
         fontSize: 13,
         lineHeight: 19,
         fontWeight: '500',

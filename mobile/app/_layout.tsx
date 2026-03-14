@@ -17,6 +17,19 @@ export const unstable_settings = {
   initialRouteName: "(auth)",
 };
 
+const AppTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: "#00E676",
+    background: "#0A0A0A",
+    card: "#141414",
+    text: "#F5F5F5",
+    border: "#1E1E1E",
+    notification: "#00E676",
+  },
+};
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -69,7 +82,7 @@ function RootLayoutNav() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={DarkTheme}>
+      <ThemeProvider value={AppTheme}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
