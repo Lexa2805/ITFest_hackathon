@@ -147,11 +147,11 @@ async def get_latest_shopping_list(user_id: str) -> ShoppingListResponse:
 async def forward_shopping_list(user_id: str, list_id: str) -> dict:
     supabase = await get_supabase()
     # "POST /shopping/proposal — that system will be built later, so mock the call gracefully if unavailable"
-    result = await supabase.table(SHOPPING_LIST_TABLE).select("*").eq("id", list_id).eq("user_id", user_id).maybe_single().execute()
+    result = await supabase.table(SHOPPING_LIST_TABLE).select("*").eq("id", list_id).eq("user_id", user_id).limit(1).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Shopping list not found.")
         
-    shopping_list = result.data
+    shopping_list = result.data[0]
     
     # Mocking the call to the future Autonomous Shopping System
     shopping_service_url = os.getenv("SHOPPING_SERVICE_URL", "http://localhost:8001")

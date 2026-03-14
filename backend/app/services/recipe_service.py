@@ -218,8 +218,8 @@ async def get_user_recipes(user_id: str, limit: int = 10) -> list[RecipeResponse
 
 async def get_recipe(user_id: str, recipe_id: str) -> dict:
     supabase = await get_supabase()
-    result = await supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).eq("id", recipe_id).maybe_single().execute()
-    recipe_data = _safe_data(result)
+    result = await supabase.table(RECIPES_TABLE).select("*").eq("user_id", user_id).eq("id", recipe_id).limit(1).execute()
+    recipe_data = result.data[0] if result.data else None
     if not recipe_data:
         raise HTTPException(status_code=404, detail="Recipe not found.")
     return recipe_data

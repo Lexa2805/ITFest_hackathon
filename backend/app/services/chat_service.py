@@ -167,11 +167,11 @@ async def _build_system_context(user_id: str, timezone: str) -> str:
             supabase.table("profiles")
             .select("daily_kcal_target, protein_target_g, fat_target_g, carbs_target_g")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if prof_result.data:
-            p = prof_result.data
+            p = prof_result.data[0]
             sections.append(
                 f"NUTRITION GOALS: {p.get('daily_kcal_target', 'N/A')} kcal/day, "
                 f"{p.get('protein_target_g', 'N/A')}g protein, "
@@ -188,11 +188,11 @@ async def _build_system_context(user_id: str, timezone: str) -> str:
             .select("total_calories, total_protein_g, total_carbs_g, total_fat_g")
             .eq("user_id", user_id)
             .eq("date", today_str)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if dl_result.data:
-            d = dl_result.data
+            d = dl_result.data[0]
             sections.append(
                 f"TODAY'S CONSUMPTION: {d.get('total_calories', 0)} kcal, "
                 f"{d.get('total_protein_g', 0)}g protein, "
@@ -226,12 +226,12 @@ async def _build_system_context(user_id: str, timezone: str) -> str:
             supabase.table("health_exports")
             .select("parsed_metrics, physical_state")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if he_result.data:
-            pm = he_result.data.get("parsed_metrics") or {}
-            ps = he_result.data.get("physical_state") or {}
+            pm = he_result.data[0].get("parsed_metrics") or {}
+            ps = he_result.data[0].get("physical_state") or {}
             health_parts: list[str] = []
             if pm.get("sleep_hours") is not None:
                 health_parts.append(f"sleep: {pm['sleep_hours']}h")

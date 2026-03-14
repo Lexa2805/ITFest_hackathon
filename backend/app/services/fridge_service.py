@@ -97,7 +97,7 @@ async def get_item(user_id: str, item_id: UUID) -> FridgeItemOut:
         .select("*")
         .eq("id", str(item_id))
         .eq("user_id", user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
     if not result.data:
@@ -105,7 +105,7 @@ async def get_item(user_id: str, item_id: UUID) -> FridgeItemOut:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Fridge item {item_id} not found.",
         )
-    return _row_to_item(result.data)
+    return _row_to_item(result.data[0])
 
 
 async def update_item(

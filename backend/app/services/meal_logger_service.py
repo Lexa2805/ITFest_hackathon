@@ -67,10 +67,10 @@ async def get_daily_summary(user_id: str, summary_date: date) -> DailySummaryRes
             supabase.table(PROFILES_TABLE)
             .select("daily_kcal_target, protein_target_g, fat_target_g, carbs_target_g")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        profile = profile_result.data or {}
+        profile = profile_result.data[0] if profile_result.data else {}
     except APIError as exc:
         logger.warning("profiles query failed, using defaults: %s", exc)
         profile = {}

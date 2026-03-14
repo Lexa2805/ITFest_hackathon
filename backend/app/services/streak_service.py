@@ -157,11 +157,11 @@ async def _get_calorie_goal_dates(user_id: str) -> List[date]:
             supabase.table("profiles")
             .select("daily_kcal_target")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if prof.data:
-            target = prof.data.get("daily_kcal_target")
+            target = prof.data[0].get("daily_kcal_target")
     except Exception as exc:
         logger.warning("Failed to fetch profile for calorie goal: %s", exc)
 

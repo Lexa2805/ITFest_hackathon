@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore, type ChatMessage } from '@/stores/chatStore';
 
@@ -43,6 +43,10 @@ export default function ChatScreen() {
   const { messages, streaming, error, sendMessage, resetChat } = useChatStore();
   const [input, setInput] = useState('');
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
+  const insets = useSafeAreaInsets();
+
+  // Floating tab bar: height 64 + bottom 12 + extra breathing room
+  const bottomOffset = Math.max(insets.bottom, 12) + 64 + 8;
 
   const handleSend = () => {
     const text = input.trim();
@@ -62,8 +66,8 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {messages.length === 0 ? (
           <View style={styles.emptyState}>
@@ -87,7 +91,7 @@ export default function ChatScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, { paddingBottom: bottomOffset }]}>
           <TextInput
             style={styles.textInput}
             value={input}
@@ -207,11 +211,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    paddingBottom: 80,
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.background,
+    zIndex: 10,
   },
   textInput: {
     flex: 1,

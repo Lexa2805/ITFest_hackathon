@@ -64,18 +64,19 @@ async def get_or_generate_briefing(user_id: str, timezone: str) -> BriefingRespo
             .select("*")
             .eq("user_id", user_id)
             .eq("date", user_today.isoformat())
-            .maybe_single()
+            .limit(1)
             .execute()
         )
     except Exception as exc:
         logger.warning("Failed to fetch cached briefing: %s", exc)
         cached = None
     if cached is not None and cached.data:
+        row_data = cached.data[0]
         return BriefingResponse(
-            narrative=cached.data["narrative"],
-            source=cached.data["source"],
-            generated_at=cached.data["created_at"],
-            date=cached.data["date"],
+            narrative=row_data["narrative"],
+            source=row_data["source"],
+            generated_at=row_data["created_at"],
+            date=row_data["date"],
         )
 
     # Aggregate data
@@ -130,12 +131,12 @@ async def _aggregate_user_data(user_id: str, user_today: date) -> BriefingDataPa
             supabase.table("health_exports")
             .select("parsed_metrics, physical_state")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if he_result.data:
-            pm = he_result.data.get("parsed_metrics") or {}
-            ps = he_result.data.get("physical_state") or {}
+            pm = he_result.data[0].get("parsed_metrics") or {}
+            ps = he_result.data[0].get("physical_state") or {}
             sleep_hours = pm.get("sleep_hours")
             avg_heart_rate = pm.get("avg_heart_rate")
             steps = pm.get("steps")
@@ -151,11 +152,11 @@ async def _aggregate_user_data(user_id: str, user_today: date) -> BriefingDataPa
             .select("heart_rate, sleep_hours, steps, physical_state_score")
             .eq("user_id", user_id)
             .eq("date", today_str)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if dc_result.data:
-            dc = dc_result.data
+            dc = dc_result.data[0]
             if dc.get("sleep_hours") is not None:
                 sleep_hours = dc["sleep_hours"]
             if dc.get("heart_rate") is not None:
@@ -174,11 +175,11 @@ async def _aggregate_user_data(user_id: str, user_today: date) -> BriefingDataPa
             supabase.table("profiles")
             .select("daily_kcal_target, protein_target_g, fat_target_g, carbs_target_g")
             .eq("user_id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if prof_result.data:
-            daily_kcal_target = prof_result.data.get("daily_kcal_target")
+            daily_kcal_target = prof_result.data[0].get("daily_kcal_target")
     except Exception as exc:
         logger.warning("Failed to fetch profiles: %s", exc)
 
@@ -194,14 +195,14 @@ async def _aggregate_user_data(user_id: str, user_today: date) -> BriefingDataPa
             .select("total_calories, total_protein_g, total_carbs_g, total_fat_g")
             .eq("user_id", user_id)
             .eq("date", today_str)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
         if dl_result.data:
-            consumed_kcal_today = dl_result.data.get("total_calories")
-            consumed_protein_today = dl_result.data.get("total_protein_g")
-            consumed_carbs_today = dl_result.data.get("total_carbs_g")
-            consumed_fat_today = dl_result.data.get("total_fat_g")
+            consumed_kcal_today = dl_result.data[0].get("total_calories")
+            consumed_protein_today = dl_result.data[0].get("total_protein_g")
+            consumed_carbs_today = dl_result.data[0].get("total_carbs_g")
+            consumed_fat_today = dl_result.data[0].get("total_fat_g")
     except Exception as exc:
         logger.warning("Failed to fetch daily_logs: %s", exc)
 

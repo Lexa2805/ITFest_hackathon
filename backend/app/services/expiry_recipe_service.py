@@ -158,7 +158,7 @@ async def get_expiry_alerts(user_id: str) -> list[ExpiryAlertItem]:
         supabase.table(FRIDGE_TABLE)
         .select("id, name, expiry_date")
         .eq("user_id", user_id)
-        .not_("expiry_date", "is", "null")
+        .neq("expiry_date", "null")
         .execute()
     )
     rows: list[dict] = result.data or []
@@ -203,11 +203,11 @@ async def _fetch_nutrition_goals(user_id: str) -> str:
         supabase.table(PROFILES_TABLE)
         .select("daily_kcal_target, protein_target_g, fat_target_g, carbs_target_g")
         .eq("user_id", user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
     if result.data:
-        return json.dumps(result.data)
+        return json.dumps(result.data[0])
     return "No specific goals set. Provide balanced healthy recipes."
 
 

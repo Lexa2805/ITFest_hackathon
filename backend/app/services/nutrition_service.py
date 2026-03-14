@@ -19,9 +19,9 @@ def _safe_data(result) -> object:
 async def set_or_update_goal(user_id: str, goal: NutritionGoalCreate) -> NutritionGoalResponse:
     supabase = await get_supabase()
     # Check if a goal already exists
-    result = await supabase.table(GOALS_TABLE).select("id").eq("user_id", user_id).maybe_single().execute()
+    result = await supabase.table(GOALS_TABLE).select("id").eq("user_id", user_id).limit(1).execute()
     payload = {"user_id": user_id, **goal.model_dump(mode="json")}
-    existing_goal = _safe_data(result)
+    existing_goal = result.data[0] if result.data else None
     
     if existing_goal:
         # Update existing goal
@@ -43,8 +43,8 @@ async def set_or_update_goal(user_id: str, goal: NutritionGoalCreate) -> Nutriti
 
 async def get_goal(user_id: str) -> NutritionGoalResponse:
     supabase = await get_supabase()
-    result = await supabase.table(GOALS_TABLE).select("*").eq("user_id", user_id).maybe_single().execute()
-    goal_data = _safe_data(result)
+    result = await supabase.table(GOALS_TABLE).select("*").eq("user_id", user_id).limit(1).execute()
+    goal_data = result.data[0] if result.data else None
     if not goal_data:
         raise HTTPException(status_code=404, detail="Nutrition goals not set.")
     return NutritionGoalResponse(**goal_data)
@@ -53,8 +53,8 @@ async def get_goal(user_id: str) -> NutritionGoalResponse:
 async def _get_today_log(user_id: str) -> dict:
     supabase = await get_supabase()
     today_str = datetime.date.today().isoformat()
-    result = await supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).eq("date", today_str).maybe_single().execute()
-    log_data = _safe_data(result)
+    result = await supabase.table(LOGS_TABLE).select("*").eq("user_id", user_id).eq("date", today_str).limit(1).execute()
+    log_data = result.data[0] if result.data else None
     if log_data:
         return log_data
     
