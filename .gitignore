@@ -44,3 +44,4 @@ mobile/web-build/
 secrets.json
 *.tfstate
 *.tfstate.*
+apple_health_export/

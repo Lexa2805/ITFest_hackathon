@@ -71,3 +71,25 @@ export async function uploadHealthExportZip(fileUri: string, fileName: string): 
         return data;
     }
 }
+
+export async function getHealthData(): Promise<HealthExportUploadResponse | null> {
+    try {
+        const { data } = await api.get<HealthExportUploadResponse>('/health-data');
+        return data;
+    } catch (error: any) {
+        if (error?.response?.status === 404) {
+            return null;
+        }
+
+        // Compatibility fallback for deployments that expose /api-prefixed paths.
+        try {
+            const { data } = await api.get<HealthExportUploadResponse>('/api/health-data');
+            return data;
+        } catch (fallbackError: any) {
+            if (fallbackError?.response?.status === 404) {
+                return null;
+            }
+            throw fallbackError;
+        }
+    }
+}

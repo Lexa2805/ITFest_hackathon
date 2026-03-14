@@ -1,6 +1,10 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHealthStore } from '@/stores/healthStore';
+import { useFridgeStore } from '@/stores/fridgeStore';
+import { useAuthStore } from '@/stores/authStore';
+import { getLatestShoppingList, suggestRecipes, RecipeResponse, ShoppingListResponse } from '@/services/nutritionApi';
 
 type HealthMetric = {
   label: string;
@@ -12,46 +16,13 @@ type FridgeItem = {
   name: string;
   state: string;
   tone: 'good' | 'warn' | 'alert';
+  daysLeft?: number;
 };
 
 type MealSuggestion = {
   name: string;
   subtitle: string;
 };
-
-const mockUser = {
-  greeting: 'Good morning',
-  name: 'Alex',
-};
-
-const aiInsight =
-  'Your sleep is improving this week. A protein-rich lunch and light evening mobility will keep your energy steady.';
-
-const healthMetrics: HealthMetric[] = [
-  { label: 'Sleep', value: '7h 42m', trend: '+18 min' },
-  { label: 'Heart Rate', value: '68 bpm', trend: 'Resting' },
-  { label: 'Steps', value: '8,420', trend: '84% goal' },
-  { label: 'Calories', value: '1,640', trend: 'Balanced' },
-];
-
-const fridgeItems: FridgeItem[] = [
-  { name: 'Spinach', state: 'Fresh • 3 days left', tone: 'good' },
-  { name: 'Greek Yogurt', state: 'Use soon • expires tomorrow', tone: 'warn' },
-  { name: 'Salmon', state: 'Cook today', tone: 'alert' },
-];
-
-const mealSuggestions: MealSuggestion[] = [
-  { name: 'Salmon Grain Bowl', subtitle: 'High protein • 28 min' },
-  { name: 'Yogurt Berry Parfait', subtitle: 'Quick snack • 8 min' },
-  { name: 'Spinach Omelette Wrap', subtitle: 'Recovery meal • 15 min' },
-];
-
-const workoutSuggestion = {
-  title: '20-min Recovery Flow',
-  detail: 'Focus on hips, thoracic mobility, and breath work after your evening walk.',
-};
-
-const shoppingItems = ['Avocado', 'Chia Seeds', 'Bell Pepper'];
 
 const C = {
   background: '#0A0A0A',
@@ -66,6 +37,14 @@ const C = {
   warn: '#FFD166',
   alert: '#FF6B6B',
 } as const;
+
+// Fallback mock data when no health data is uploaded
+const mockHealthMetrics: HealthMetric[] = [
+  { label: 'Sleep', value: 'No data', trend: 'Upload health data' },
+  { label: 'Heart Rate', value: 'No data', trend: 'Upload health data' },
+  { label: 'Steps', value: 'No data', trend: 'Upload health data' },
+  { label: 'Calories', value: 'No data', trend: 'Upload health data' },
+];
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
@@ -96,12 +75,253 @@ function FridgeStateBadge({ tone }: { tone: FridgeItem['tone'] }) {
 }
 
 export default function HomeScreen() {
+  const healthData = useHealthStore((state) => state.healthData);
+  const loadHealthData = useHealthStore((state) => state.loadHealthData);
+  const isHealthLoading = useHealthStore((state) => state.isLoading);
+  const isHealthInitialized = useHealthStore((state) => state.isInitialized);
+  const user = useAuthStore((state) => state.user);
+  const { items: fridgeItems, fetchItems } = useFridgeStore();
+  
+  const [recipes, setRecipes] = useState<RecipeResponse[]>([]);
+  const [shoppingList, setShoppingList] = useState<ShoppingListResponse | null>(null);
+  const [loadingRecipes, setLoadingRecipes] = useState(true);
+  const [loadingShopping, setLoadingShopping] = useState(true);
+
+  // Fetch all data on mount
+  useEffect(() => {
+    // Load health data from database
+    if (!isHealthInitialized) {
+      loadHealthData();
+    }
+
+    fetchItems().catch(err => console.error('Error fetching fridge items:', err));
+
+    suggestRecipes()
+      .then(setRecipes)
+      .catch(err => console.error('Error loading recipes:', err))
+      .finally(() => setLoadingRecipes(false));
+
+    getLatestShoppingList()
+      .then(setShoppingList)
+      .catch(err => {
+        if (err.response?.status !== 404) {
+          console.error('Error loading shopping list:', err);
+        }
+      })
+      .finally(() => setLoadingShopping(false));
+  }, []);
+
+  // Get greeting based on time of day
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  // Get user's first name or default
+  const userName = useMemo(() => {
+    if (user?.email) {
+      const emailName = user.email.split('@')[0];
+      return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    }
+    return 'there';
+  }, [user]);
+
+  // Generate AI insight based on health data
+  const aiInsight = useMemo(() => {
+    if (!healthData) {
+      return 'Upload your health data to get personalized insights and recommendations.';
+    }
+
+    const m = healthData.parsed_metrics;
+    const sleepHours = m.sleep_analysis.average;
+    const avgSteps = Math.round(m.step_count.average);
+    const avgHR = Math.round(m.heart_rate.average);
+
+    let insights: string[] = [];
+
+    if (sleepHours < 7) {
+      insights.push('Your sleep could use improvement');
+    } else if (sleepHours >= 7 && sleepHours < 8) {
+      insights.push('Your sleep is on track');
+    } else {
+      insights.push('Great sleep quality');
+    }
+
+    if (avgSteps < 5000) {
+      insights.push('Try to increase your daily movement');
+    } else if (avgSteps >= 10000) {
+      insights.push('Excellent activity levels');
+    }
+
+    if (avgHR >= 60 && avgHR <= 75) {
+      insights.push('Your resting heart rate is healthy');
+    }
+
+    return insights.length > 0
+      ? `${insights.join('. ')}. Keep up the momentum with balanced nutrition and regular movement.`
+      : 'Your health metrics look good. Stay consistent with your wellness routine.';
+  }, [healthData]);
+
+  // Transform health data from the store into the format needed for display
+  const healthMetrics: HealthMetric[] = useMemo(() => {
+    if (!healthData) {
+      return mockHealthMetrics;
+    }
+
+    const m = healthData.parsed_metrics;
+
+    // Helper to format hours (data is already in hours, not minutes!)
+    const formatHours = (hours: number): string => {
+      const h = Math.floor(hours);
+      const mins = Math.round((hours - h) * 60);
+      return `${h}h ${mins}m`;
+    };
+
+    // Helper to format numbers with commas
+    const formatNumber = (num: number): string => {
+      return Math.round(num).toLocaleString();
+    };
+
+    return [
+      {
+        label: 'Sleep',
+        value: formatHours(m.sleep_analysis.average),
+        trend: `${m.sleep_analysis.sample_count} nights`,
+      },
+      {
+        label: 'Heart Rate',
+        value: `${Math.round(m.heart_rate.average)} bpm`,
+        trend: 'Average',
+      },
+      {
+        label: 'Steps',
+        value: formatNumber(m.step_count.average),
+        trend: 'Daily avg',
+      },
+      {
+        label: 'Calories',
+        value: formatNumber(m.active_energy_burned.average),
+        trend: 'Daily avg',
+      },
+    ];
+  }, [healthData]);
+
+  // Transform fridge items into display format
+  const fridgeItemsDisplay: FridgeItem[] = useMemo(() => {
+    if (fridgeItems.length === 0) {
+      return [
+        { name: 'No items', state: 'Add items to your fridge', tone: 'good' },
+      ];
+    }
+
+    return fridgeItems
+      .slice(0, 5) // Show top 5 items
+      .map(item => {
+        const daysLeft = item.expiry_date
+          ? Math.ceil((new Date(item.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        let state: string;
+        let tone: 'good' | 'warn' | 'alert';
+
+        if (daysLeft === null) {
+          state = `${item.quantity} ${item.unit}`;
+          tone = 'good';
+        } else if (daysLeft <= 0) {
+          state = 'Expired';
+          tone = 'alert';
+        } else if (daysLeft === 1) {
+          state = 'Expires tomorrow';
+          tone = 'alert';
+        } else if (daysLeft <= 2) {
+          state = `Use soon • ${daysLeft} days left`;
+          tone = 'warn';
+        } else if (daysLeft <= 5) {
+          state = `${daysLeft} days left`;
+          tone = 'warn';
+        } else {
+          state = `Fresh • ${daysLeft} days left`;
+          tone = 'good';
+        }
+
+        return { name: item.name, state, tone, daysLeft: daysLeft ?? undefined };
+      })
+      .sort((a, b) => {
+        // Sort by urgency: alert > warn > good
+        const toneOrder = { alert: 0, warn: 1, good: 2 };
+        return toneOrder[a.tone] - toneOrder[b.tone];
+      });
+  }, [fridgeItems]);
+
+  // Transform recipes into meal suggestions
+  const mealSuggestions: MealSuggestion[] = useMemo(() => {
+    if (loadingRecipes) {
+      return [];
+    }
+
+    if (recipes.length === 0) {
+      return [
+        { name: 'No recipes available', subtitle: 'Add items to your fridge to get suggestions' },
+      ];
+    }
+
+    return recipes.slice(0, 3).map(recipe => ({
+      name: recipe.name,
+      subtitle: `${recipe.prep_time_minutes} min • ${recipe.calories} cal`,
+    }));
+  }, [recipes, loadingRecipes]);
+
+  // Generate workout suggestion based on health data
+  const workoutSuggestion = useMemo(() => {
+    if (!healthData) {
+      return {
+        title: 'Upload Health Data',
+        detail: 'Get personalized workout recommendations based on your activity levels and recovery metrics.',
+      };
+    }
+
+    const avgSteps = Math.round(healthData.parsed_metrics.step_count.average);
+    const sleepHours = healthData.parsed_metrics.sleep_analysis.average / 60;
+
+    if (avgSteps < 5000) {
+      return {
+        title: '30-min Gentle Walk',
+        detail: 'Start with a light walk to increase your daily movement. Focus on consistency over intensity.',
+      };
+    } else if (sleepHours < 7) {
+      return {
+        title: '20-min Recovery Flow',
+        detail: 'Focus on gentle stretching and breathwork to support better sleep and recovery.',
+      };
+    } else {
+      return {
+        title: '25-min Strength Circuit',
+        detail: 'Your metrics show good recovery. Try bodyweight exercises focusing on major muscle groups.',
+      };
+    }
+  }, [healthData]);
+
+  // Get shopping items
+  const shoppingItems: string[] = useMemo(() => {
+    if (loadingShopping) {
+      return [];
+    }
+
+    if (!shoppingList || shoppingList.items.length === 0) {
+      return ['All stocked up!'];
+    }
+
+    return shoppingList.items.slice(0, 5).map(item => item.name);
+  }, [shoppingList, loadingShopping]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.welcomeBlock}>
-          <Text style={styles.greeting}>{mockUser.greeting}</Text>
-          <Text style={styles.userName}>{mockUser.name}</Text>
+          <Text style={styles.greeting}>{greeting}</Text>
+          <Text style={styles.userName}>{userName}</Text>
           <Text style={styles.welcomeCaption}>Your wellness assistant is ready for today.</Text>
         </View>
 
@@ -123,8 +343,8 @@ export default function HomeScreen() {
           <SectionHeader title="Fridge Status" subtitle="Freshness and expiry at a glance" />
           <SurfaceCard>
             <View style={styles.listBlock}>
-              {fridgeItems.map((item) => (
-                <View key={item.name} style={styles.listRow}>
+              {fridgeItemsDisplay.map((item, index) => (
+                <View key={`${item.name}-${index}`} style={styles.listRow}>
                   <View style={styles.rowLeft}>
                     <FridgeStateBadge tone={item.tone} />
                     <Text style={styles.rowTitle}>{item.name}</Text>
@@ -138,16 +358,22 @@ export default function HomeScreen() {
 
         <View>
           <SectionHeader title="Nutrition Picks" subtitle="Recipe suggestions from your current ingredients" />
-          <SurfaceCard>
-            <View style={styles.listBlock}>
-              {mealSuggestions.map((meal) => (
-                <View key={meal.name} style={styles.recipeRow}>
-                  <Text style={styles.rowTitle}>{meal.name}</Text>
-                  <Text style={styles.rowMeta}>{meal.subtitle}</Text>
-                </View>
-              ))}
-            </View>
-          </SurfaceCard>
+          {loadingRecipes ? (
+            <SurfaceCard>
+              <ActivityIndicator color={C.accent} size="small" />
+            </SurfaceCard>
+          ) : (
+            <SurfaceCard>
+              <View style={styles.listBlock}>
+                {mealSuggestions.map((meal, index) => (
+                  <View key={`${meal.name}-${index}`} style={styles.recipeRow}>
+                    <Text style={styles.rowTitle}>{meal.name}</Text>
+                    <Text style={styles.rowMeta}>{meal.subtitle}</Text>
+                  </View>
+                ))}
+              </View>
+            </SurfaceCard>
+          )}
         </View>
 
         <View>
@@ -160,15 +386,21 @@ export default function HomeScreen() {
 
         <View>
           <SectionHeader title="Shopping Reminder" subtitle="Missing ingredients for your next meals" />
-          <SurfaceCard>
-            <View style={styles.shoppingRow}>
-              {shoppingItems.map((item) => (
-                <View key={item} style={styles.shoppingChip}>
-                  <Text style={styles.shoppingChipText}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          </SurfaceCard>
+          {loadingShopping ? (
+            <SurfaceCard>
+              <ActivityIndicator color={C.accent} size="small" />
+            </SurfaceCard>
+          ) : (
+            <SurfaceCard>
+              <View style={styles.shoppingRow}>
+                {shoppingItems.map((item, index) => (
+                  <View key={`${item}-${index}`} style={styles.shoppingChip}>
+                    <Text style={styles.shoppingChipText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </SurfaceCard>
+          )}
         </View>
 
         <View style={styles.bottomHint}>

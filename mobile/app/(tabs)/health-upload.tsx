@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircularScore } from '@/components/health/CircularScore';
 import { HealthMetricCard } from '@/components/health/HealthMetricCard';
 import { HealthExportUploadResponse, uploadHealthExportZip } from '@/services/healthExportApi';
+import { useHealthStore } from '@/stores/healthStore';
 
 const C = {
     bg: '#0A0A0A',
@@ -26,6 +27,7 @@ export default function HealthUploadScreen() {
     const [processing, setProcessing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [result, setResult] = useState<HealthExportUploadResponse | null>(null);
+    const setHealthData = useHealthStore((state) => state.setHealthData);
 
     const metricCards = useMemo(() => {
         if (!result) {
@@ -106,6 +108,7 @@ export default function HealthUploadScreen() {
             setProcessing(true);
             const uploadResponse = await uploadHealthExportZip(selectedFile.uri, selectedFile.name);
             setResult(uploadResponse);
+            setHealthData(uploadResponse); // Save to global store
         } catch (error: any) {
             const serverMessage = error?.response?.data?.detail;
             setErrorMessage(serverMessage || 'Upload failed. Please verify this is a valid Apple Health export ZIP.');

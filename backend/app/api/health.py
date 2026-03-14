@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from app.api.fridge import get_current_user_id
 from app.schemas.health import HealthExportUploadResponse
 from app.services.agent_trigger_service import trigger_downstream_agents
 from app.services.health_export_parser import parse_health_export_zip
 from app.services.physical_state_service import calculate_physical_state
+from app.services import health_service
 
 router = APIRouter(tags=["health-export"])
 
@@ -24,10 +26,11 @@ router = APIRouter(tags=["health-export"])
 )
 async def upload_health_export(
     file: UploadFile = File(..., description="Apple Health export ZIP file"),
+    user_id: str = Depends(get_current_user_id),
 ) -> HealthExportUploadResponse:
     """
     Accept `export.zip`, parse `export.xml`, compute biometric summaries,
-    generate a physical-state score, and trigger downstream agents.
+    generate a physical-state score, save to database, and trigger downstream agents.
     """
     filename = (file.filename or "").lower()
     if not filename.endswith(".zip"):
@@ -59,6 +62,9 @@ async def upload_health_export(
         hrv_values=raw_series["hrv"],
     )
 
+    # Save to database
+    await health_service.save_health_data(user_id, parsed_metrics, physical_state)
+
     downstream_results = await trigger_downstream_agents(
         parsed_metrics=parsed_metrics,
         physical_state=physical_state,
@@ -68,4 +74,35 @@ async def upload_health_export(
         parsed_metrics=parsed_metrics,
         physical_state=physical_state,
         downstream_calls=downstream_results,
+    )
+
+
+@router.get(
+    "/health-data",
+    response_model=HealthExportUploadResponse,
+    summary="Get the latest health export data for the current user",
+)
+@router.get(
+    "/api/health-data",
+    response_model=HealthExportUploadResponse,
+    include_in_schema=False,
+)
+async def get_health_data(
+    user_id: str = Depends(get_current_user_id),
+) -> HealthExportUploadResponse:
+    """
+    Retrieve the most recent health export data for the authenticated user.
+    """
+    data = await health_service.get_health_data(user_id)
+    
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No health data found. Please upload a health export first.",
+        )
+    
+    return HealthExportUploadResponse(
+        parsed_metrics=data["parsed_metrics"],
+        physical_state=data["physical_state"],
+        downstream_calls=[],  # Historical data doesn't include downstream calls
     )
