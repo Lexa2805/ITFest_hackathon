@@ -100,6 +100,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="health-upload"
+        options={{
+          title: 'Health',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="pulse" color={color} size={24} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
