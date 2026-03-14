@@ -1,9 +1,10 @@
 /**
  * Zustand auth store.
- * Persists the access token with expo-secure-store.
+ * Persists the access token with secure storage.
  */
 
 import { create } from "zustand";
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import {
   loginUser,
@@ -15,6 +16,49 @@ import {
 
 const TOKEN_KEY = "health_os_token";
 const REFRESH_KEY = "health_os_refresh";
+
+function getWebStorage() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage;
+}
+
+async function setStoredItem(key: string, value: string): Promise<void> {
+  if (Platform.OS === "web") {
+    getWebStorage()?.setItem(key, value);
+    return;
+  }
+
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    getWebStorage()?.setItem(key, value);
+  }
+}
+
+async function getStoredItem(key: string): Promise<string | null> {
+  if (Platform.OS === "web") {
+    return getWebStorage()?.getItem(key) ?? null;
+  }
+
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return getWebStorage()?.getItem(key) ?? null;
+  }
+}
+
+async function deleteStoredItem(key: string): Promise<void> {
+  if (Platform.OS === "web") {
+    getWebStorage()?.removeItem(key);
+    return;
+  }
+
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    getWebStorage()?.removeItem(key);
+  }
+}
 
 interface AuthState {
   accessToken: string | null;
@@ -37,8 +81,8 @@ function applySession(
   set: (partial: Partial<AuthState>) => void,
   res: AuthResponse
 ) {
-  SecureStore.setItemAsync(TOKEN_KEY, res.access_token);
-  SecureStore.setItemAsync(REFRESH_KEY, res.refresh_token);
+  void setStoredItem(TOKEN_KEY, res.access_token);
+  void setStoredItem(REFRESH_KEY, res.refresh_token);
 
   set({
     accessToken: res.access_token,
@@ -57,8 +101,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true, // starts true until hydrate() finishes
 
   hydrate: async () => {
-    const token = await SecureStore.getItemAsync(TOKEN_KEY);
-    const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
+    const token = await getStoredItem(TOKEN_KEY);
+    const refresh = await getStoredItem(REFRESH_KEY);
 
     if (token) {
       set({
@@ -101,8 +145,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    await SecureStore.deleteItemAsync(REFRESH_KEY);
+    await deleteStoredItem(TOKEN_KEY);
+    await deleteStoredItem(REFRESH_KEY);
     set({
       accessToken: null,
       refreshToken: null,
