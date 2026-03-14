@@ -7,6 +7,7 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useAuthStore } from "@/stores/authStore";
+import { ProfileProvider } from "@/contexts/ProfileContext";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -82,13 +83,15 @@ function RootLayoutNav() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={AppTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-        </Stack>
-      </ThemeProvider>
+      <ProfileProvider>
+        <ThemeProvider value={AppTheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+          </Stack>
+        </ThemeProvider>
+      </ProfileProvider>
     </SafeAreaProvider>
   );
 }

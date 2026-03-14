@@ -4,6 +4,8 @@
 
 import api from "./api";
 
+const OPEN_FOOD_FACTS_API = "https://world.openfoodfacts.org/api/v2/product";
+
 // ── Types ────────────────────────────────────────────────────
 
 export interface NutritionGoalCreate {
@@ -85,6 +87,109 @@ export interface ShoppingListResponse {
   generated_at: string;
 }
 
+export interface CalorieCalculationRequest {
+  weight: number;
+  height: number;
+  age: number;
+  gender: "male" | "female";
+  activity_level: "sedentary" | "lightly active" | "moderately active" | "very active";
+  goal: "lose weight" | "maintain" | "build muscle" | "improve endurance";
+}
+
+export interface CalorieCalculationResponse {
+  bmr: number;
+  tdee: number;
+  daily_kcal_target: number;
+  protein_g: number;
+  fat_g: number;
+  carbs_g: number;
+}
+
+export interface MealIngredient {
+  name: string;
+  grams: number;
+}
+
+export interface PlannedMeal {
+  meal_name: string;
+  ingredients: MealIngredient[];
+  kcal: number;
+  protein_g: number;
+  fat_g: number;
+  carbs_g: number;
+}
+
+export interface MealPlanResponse {
+  breakfast: PlannedMeal[];
+  lunch: PlannedMeal[];
+  dinner: PlannedMeal[];
+  snacks: PlannedMeal[];
+  total_kcal: number;
+  total_protein_g: number;
+  total_fat_g: number;
+  total_carbs_g: number;
+}
+
+export interface MealPlanRequest {
+  daily_kcal_target: number;
+  macro_targets: {
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+  };
+}
+
+export interface MealLogRequest {
+  meal_name: string;
+  ingredients: MealIngredient[];
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  time_of_day: "breakfast" | "lunch" | "dinner" | "snack";
+  date: string;
+}
+
+export interface MealLogResponse {
+  id: string;
+  user_id: string;
+  date: string;
+  meal_name: string;
+  ingredients_json: MealIngredient[];
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  time_of_day: "breakfast" | "lunch" | "dinner" | "snack";
+  created_at: string;
+}
+
+export interface DailySummaryResponse {
+  date: string;
+  meals: MealLogResponse[];
+  kcal: { consumed: number; target: number };
+  protein: { consumed: number; target: number };
+  fat: { consumed: number; target: number };
+  carbs: { consumed: number; target: number };
+  remaining_kcal: number;
+  status: "On track" | "Under eating" | "Over eating";
+}
+
+export interface BarcodeNutritionProduct {
+  barcode: string;
+  productName: string;
+  brand?: string;
+  kcalPer100g: number;
+  proteinPer100g: number;
+  fatPer100g: number;
+  carbsPer100g: number;
+}
+
+function toNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 // ── API calls ────────────────────────────────────────────────
 
 export async function setNutritionGoals(
@@ -106,9 +211,9 @@ export async function suggestRecipes(forceRegenerate: boolean = false): Promise<
   const { data } = await api.post<RecipeResponse[]>(
     "/nutrition/recipes/suggest",
     {},
-    { 
+    {
       params: { force_regenerate: forceRegenerate },
-      timeout: 60_000 
+      timeout: 60_000
     }
   );
   return data;
@@ -142,9 +247,9 @@ export async function generateShoppingList(forceRegenerate: boolean = false): Pr
   const { data } = await api.post<ShoppingListResponse>(
     "/nutrition/shopping-list/generate",
     {},
-    { 
+    {
       params: { force_regenerate: forceRegenerate },
-      timeout: 60_000 
+      timeout: 60_000
     }
   );
   return data;
@@ -164,4 +269,76 @@ export async function forwardShoppingList(
     `/nutrition/shopping-list/${listId}/forward`
   );
   return data;
+}
+
+export async function calculateCalories(
+  payload: CalorieCalculationRequest
+): Promise<CalorieCalculationResponse> {
+  const { data } = await api.post<CalorieCalculationResponse>(
+    "/calculate-calories",
+    payload
+  );
+  return data;
+}
+
+export async function generateMealPlan(
+  payload: MealPlanRequest
+): Promise<MealPlanResponse> {
+  const { data } = await api.post<MealPlanResponse>(
+    "/nutrition-agent/meal-plan",
+    payload,
+    { timeout: 60_000 }
+  );
+  return data;
+}
+
+export async function getLatestMealPlan(): Promise<MealPlanResponse> {
+  const { data } = await api.get<MealPlanResponse>("/nutrition-agent/meal-plan/latest");
+  return data;
+}
+
+export async function logMeal(payload: MealLogRequest): Promise<MealLogResponse> {
+  const { data } = await api.post<MealLogResponse>("/nutrition-agent/log-meal", payload);
+  return data;
+}
+
+export async function getDailySummary(userId: string, date: string): Promise<DailySummaryResponse> {
+  const { data } = await api.get<DailySummaryResponse>(`/nutrition-agent/daily-summary/${userId}/${date}`);
+  return data;
+}
+
+export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeNutritionProduct> {
+  const normalized = barcode.trim();
+  if (!normalized) {
+    throw new Error("Barcode is required.");
+  }
+
+  const response = await fetch(`${OPEN_FOOD_FACTS_API}/${encodeURIComponent(normalized)}.json`);
+  if (!response.ok) {
+    throw new Error("Could not fetch product for this barcode.");
+  }
+
+  const payload = await response.json();
+  if (payload?.status !== 1 || !payload?.product) {
+    throw new Error("Product not found for this barcode.");
+  }
+
+  const product = payload.product;
+  const nutriments = product.nutriments ?? {};
+
+  const kcalPer100g = toNumber(
+    nutriments["energy-kcal_100g"] ?? nutriments["energy-kcal"]
+  );
+
+  return {
+    barcode: normalized,
+    productName: String(product.product_name ?? "Unknown product"),
+    brand: product.brands ? String(product.brands) : undefined,
+    kcalPer100g,
+    proteinPer100g: toNumber(nutriments["proteins_100g"] ?? nutriments.proteins),
+    fatPer100g: toNumber(nutriments["fat_100g"] ?? nutriments.fat),
+    carbsPer100g: toNumber(
+      nutriments["carbohydrates_100g"] ?? nutriments.carbohydrates
+    ),
+  };
 }

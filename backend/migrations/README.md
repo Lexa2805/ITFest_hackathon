@@ -32,6 +32,16 @@ The table has Row Level Security (RLS) enabled, which means:
 - The service role key (used by the backend) bypasses RLS
 - Direct client access would be restricted to the authenticated user's data
 
+### 4. Create profile and manual check-in tables
+
+Run the SQL in `create_profiles_and_daily_checkins.sql` to create:
+
+- `profiles`
+- `daily_checkins`
+
+These tables include RLS policies, indexes, and a unique `(user_id, date)`
+constraint for idempotent daily check-ins.
+
 ## Table Schema
 
 ### health_exports

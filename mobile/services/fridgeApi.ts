@@ -114,3 +114,33 @@ export async function bulkAddItems(
   );
   return data.data;
 }
+
+export interface NutritionFridgeIngredient {
+  id: string;
+  user_id: string;
+  ingredient_name: string;
+  quantity: number;
+  unit: string;
+  created_at: string | null;
+}
+
+export async function addNutritionFridgeIngredient(
+  payload: { name: string; quantity: number; unit: string }
+): Promise<NutritionFridgeIngredient> {
+  const { data } = await api.post<NutritionFridgeIngredient>("/fridge", payload);
+  return data;
+}
+
+export async function getNutritionFridgeIngredients(
+  userId: string
+): Promise<NutritionFridgeIngredient[]> {
+  const { data } = await api.get<NutritionFridgeIngredient[]>(`/fridge/${userId}`);
+  return data;
+}
+
+export async function deleteNutritionFridgeIngredient(
+  userId: string,
+  ingredientId: string
+): Promise<void> {
+  await api.delete(`/fridge/${userId}/${ingredientId}`);
+}

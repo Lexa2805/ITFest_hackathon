@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -67,7 +67,7 @@ class DailyLogMeal(BaseModel):
 class DailyLogResponse(BaseModel):
     id: UUID
     user_id: UUID
-    date: date
+    date: dt_date
     meals: List[DailyLogMeal]
     total_calories: int
     total_protein_g: int
